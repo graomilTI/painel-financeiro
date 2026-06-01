@@ -1,0 +1,15 @@
+{
+  "name": "App Gestor Grão 1000",
+  "short_name": "Gestor G1000",
+  "description": "App do gestor para ajustar O.S. e acessar rotinas operacionais da Grão 1000.",
+  "start_url": "/painel/gestor-app",
+  "scope": "/painel/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#03140d",
+  "theme_color": "#052e1b",
+  "icons": [
+    { "src": "/assets/icons/pwa-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/assets/icons/pwa-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

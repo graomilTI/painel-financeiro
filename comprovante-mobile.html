@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Comprovante">
+  <title>Comprovante | G1000</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./assets/icons/pwa-192.png">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0b1220; --card: rgba(8,15,26,.9); --border: rgba(148,163,184,.14);
+      --green: #16a34a; --green-light: #34d399; --text: #e2e8f0; --muted: #64748b;
+      --radius: 18px; --danger: #f87171;
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+
+    /* ── layout ── */
+    .app { min-height: 100dvh; display: flex; flex-direction: column; max-width: 480px; margin: 0 auto; padding: 0 0 env(safe-area-inset-bottom); }
+    .topbar { display: flex; align-items: center; gap: 10px; padding: 16px 20px 12px; border-bottom: 1px solid var(--border); background: rgba(8,15,26,.95); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 10; }
+    .topbar-logo { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg,#166534,#16a34a); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; color: #fff; flex-shrink: 0; }
+    .topbar h1 { font-size: 16px; font-weight: 700; color: var(--text); }
+    .topbar p { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .body { flex: 1; padding: 24px 20px; display: flex; flex-direction: column; gap: 20px; }
+
+    /* ── steps ── */
+    .step { display: none; flex-direction: column; gap: 20px; animation: fadeIn .2s ease; }
+    .step.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ── cards ── */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 14px; }
+
+    /* ── step capture ── */
+    .capture-hero { text-align: center; padding: 32px 20px; }
+    .capture-icon { font-size: 64px; margin-bottom: 16px; line-height: 1; }
+    .capture-hero h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+    .capture-hero p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .capture-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn-capture { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px; border-radius: 16px; border: 2px dashed rgba(52,211,153,.3); background: rgba(52,211,153,.05); cursor: pointer; transition: all .16s; color: var(--text); font-size: 13px; font-weight: 700; }
+    .btn-capture:active { transform: scale(.97); background: rgba(52,211,153,.1); border-color: rgba(52,211,153,.6); }
+    .btn-capture .icon { font-size: 32px; }
+    .install-hint { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: rgba(59,130,246,.08); border: 1px solid rgba(59,130,246,.2); border-radius: 12px; font-size: 12px; color: #93c5fd; line-height: 1.4; }
+
+    /* ── step preview ── */
+    .preview-wrap { position: relative; border-radius: 14px; overflow: hidden; background: rgba(0,0,0,.4); min-height: 220px; display: flex; align-items: center; justify-content: center; }
+    #preview-img { width: 100%; max-height: 380px; object-fit: contain; display: none; }
+    #pdf-badge { display: none; position: absolute; top: 10px; left: 10px; background: rgba(239,68,68,.9); color: #fff; font-size: 11px; font-weight: 800; padding: 4px 8px; border-radius: 6px; letter-spacing: .04em; }
+    .file-info { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(255,255,255,.04); border-radius: 10px; font-size: 13px; color: var(--muted); }
+    .file-info strong { color: var(--text); }
+
+    /* ── step loading ── */
+    .loading-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 60px 20px; text-align: center; }
+    .spinner { width: 52px; height: 52px; border: 4px solid rgba(52,211,153,.15); border-top-color: var(--green-light); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-msg { color: var(--muted); font-size: 14px; }
+
+    /* ── step select ── */
+    .search-wrap { position: relative; }
+    .search-wrap input { width: 100%; background: rgba(15,23,42,.8); border: 1px solid var(--border); border-radius: 12px; color: var(--text); padding: 12px 14px 12px 40px; font-size: 14px; outline: none; color-scheme: dark; }
+    .search-wrap input:focus { border-color: rgba(52,211,153,.4); box-shadow: 0 0 0 3px rgba(52,211,153,.08); }
+    .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 16px; pointer-events: none; }
+    #payment-list { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow-y: auto; padding-right: 2px; }
+    #payment-list::-webkit-scrollbar { width: 4px; } #payment-list::-webkit-scrollbar-track { background: transparent; } #payment-list::-webkit-scrollbar-thumb { background: rgba(148,163,184,.2); border-radius: 4px; }
+    .pay-card { background: rgba(15,23,42,.7); border: 2px solid var(--border); border-radius: 14px; padding: 14px 16px; cursor: pointer; transition: all .14s; }
+    .pay-card:active, .pay-card.selected { border-color: var(--green-light); background: rgba(52,211,153,.06); }
+    .pay-card.selected { box-shadow: 0 0 0 3px rgba(52,211,153,.12); }
+    .pay-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+    .pay-tag { background: rgba(52,211,153,.1); color: var(--green-light); font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+    .pay-value { font-weight: 800; font-size: 16px; color: var(--text); white-space: nowrap; }
+    .pay-desc { font-size: 13px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pay-fav { font-size: 12px; color: rgba(148,163,184,.7); margin-top: 3px; }
+    .empty-state { text-align: center; color: var(--muted); font-size: 14px; padding: 32px 0; }
+    .selection-hint { font-size: 12px; color: var(--muted); text-align: center; }
+
+    /* ── step ocr ── */
+    .ocr-fields { display: flex; flex-direction: column; gap: 8px; }
+    .ocr-field { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .ocr-field:last-child { border-bottom: none; }
+    .ocr-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); flex-shrink: 0; }
+    .ocr-value { font-size: 14px; color: var(--text); text-align: right; word-break: break-all; }
+    .ocr-value-hl { font-size: 18px; font-weight: 800; color: var(--green-light); }
+    .ocr-warn { color: var(--danger); font-size: 13px; }
+    .match-bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .conf-badge { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; letter-spacing: .04em; white-space: nowrap; }
+    .badge-alta  { background: rgba(52,211,153,.15); color: var(--green-light); }
+    .badge-media { background: rgba(251,146,60,.15);  color: #fb923c; }
+    .badge-baixa { background: rgba(148,163,184,.1);  color: var(--muted); }
+    .match-reasons { font-size: 11px; color: var(--muted); }
+
+    /* ── step success ── */
+    .success-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 40px 20px; text-align: center; }
+    .success-icon { font-size: 72px; animation: pop .4s cubic-bezier(.175,.885,.32,1.275); }
+    @keyframes pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .success-center h2 { font-size: 22px; font-weight: 800; }
+    .success-center p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .success-info { background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.2); border-radius: 14px; padding: 14px 20px; width: 100%; }
+    .success-info span { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .success-info strong { display: block; font-size: 18px; font-weight: 800; color: var(--green-light); margin-top: 4px; }
+
+    /* ── buttons ── */
+    .btn { width: 100%; padding: 16px; border: none; border-radius: 14px; font-size: 15px; font-weight: 800; cursor: pointer; transition: all .16s; letter-spacing: .02em; }
+    .btn:active { transform: scale(.98); }
+    .btn-primary { background: linear-gradient(135deg,#166534,#16a34a); color: #fff; box-shadow: 0 4px 16px rgba(22,101,52,.35); }
+    .btn-primary:hover { filter: brightness(1.08); }
+    .btn-primary:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .btn-secondary { background: rgba(148,163,184,.1); border: 1px solid var(--border); color: var(--text); }
+    .btn-secondary:hover { background: rgba(148,163,184,.16); }
+    .btn-row { display: flex; gap: 10px; }
+    .btn-row .btn { flex: 1; }
+
+    /* ── inputs hidden ── */
+    input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="topbar-logo">G</div>
+      <div>
+        <h1>Comprovante</h1>
+        <p>Módulo financeiro · Grao1000</p>
+      </div>
+    </div>
+
+    <div class="body">
+
+      <!-- ── Passo 1: Capturar ── -->
+      <div class="step active" id="step-capture">
+        <div class="card">
+          <div class="capture-hero">
+            <div class="capture-icon">🧾</div>
+            <h2>Enviar comprovante</h2>
+            <p>Tire uma foto ou selecione da galeria.<br>Você também pode compartilhar direto do app do banco.</p>
+          </div>
+          <div class="capture-btns">
+            <button class="btn-capture" id="btn-camera" type="button">
+              <span class="icon">📷</span>
+              <span>Câmera</span>
+            </button>
+            <button class="btn-capture" id="btn-gallery" type="button">
+              <span class="icon">🖼️</span>
+              <span>Galeria / PDF</span>
+            </button>
+          </div>
+        </div>
+        <div class="install-hint">
+          💡 Para compartilhar direto do Nubank, Bradesco ou outro app, instale esta página: toque em <strong>&nbsp;Compartilhar → Adicionar à tela inicial&nbsp;</strong>
+        </div>
+        <input id="input-camera"  type="file" accept="image/*" capture="environment">
+        <input id="input-gallery" type="file" accept="image/*,application/pdf">
+      </div>
+
+      <!-- ── Passo 2: Preview ── -->
+      <div class="step" id="step-preview">
+        <div class="card">
+          <div class="card-title">Comprovante selecionado</div>
+          <div class="preview-wrap">
+            <img id="preview-img" alt="Preview do comprovante">
+            <div id="pdf-badge">PDF</div>
+          </div>
+          <div class="file-info" style="margin-top:12px">
+            📄 <strong id="file-name">—</strong>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="btn-retry" type="button">Refazer</button>
+          <button class="btn btn-primary"   id="btn-continue" type="button">Continuar →</button>
+        </div>
+      </div>
+
+      <!-- ── Passo 3: Carregando ── -->
+      <div class="step" id="step-loading">
+        <div class="loading-center">
+          <div class="spinner"></div>
+          <p id="loading-msg">Processando...</p>
+        </div>
+      </div>
+
+      <!-- ── Passo 3b: Resultado OCR ── -->
+      <div class="step" id="step-ocr">
+        <div class="card">
+          <div class="card-title">Dados extraídos</div>
+          <div class="ocr-fields" id="ocr-fields"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Pagamentos correspondentes</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Selecione o pagamento correto ou confirme a sugestão do sistema.</p>
+          <div id="ocr-matches"></div>
+        </div>
+        <button class="btn btn-primary"   id="btn-ocr-confirm" type="button" disabled>Confirmar pagamento ✓</button>
+        <button class="btn btn-secondary" id="btn-ocr-skip"    type="button">Escolher manualmente</button>
+      </div>
+
+      <!-- ── Passo 4: Selecionar pagamento ── -->
+      <div class="step" id="step-select">
+        <div class="card">
+          <div class="card-title">Selecione o pagamento</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Toque no pagamento ao qual este comprovante pertence.</p>
+          <div class="search-wrap" style="margin-bottom:12px">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="search-payment" placeholder="Buscar por valor, favorecido ou setor...">
+          </div>
+          <div id="payment-list">
+            <div class="empty-state">Carregando...</div>
+          </div>
+        </div>
+        <p class="selection-hint">Nenhum pagamento correto? <a href="#" id="link-sem-vinculo" style="color:var(--green-light)">Salvar sem vincular</a></p>
+        <button class="btn btn-primary" id="btn-confirm" type="button" disabled>Confirmar vínculo ✓</button>
+      </div>
+
+      <!-- ── Passo 5: Sucesso ── -->
+      <div class="step" id="step-success">
+        <div class="success-center">
+          <div class="success-icon">✅</div>
+          <h2>Comprovante enviado!</h2>
+          <p>O comprovante foi vinculado ao pagamento e o setor foi notificado.</p>
+          <div class="success-info">
+            <span>Pagamento vinculado</span>
+            <strong id="success-value">—</strong>
+            <span style="margin-top:6px">Setor</span>
+            <strong id="success-origin" style="font-size:14px;color:var(--text)">—</strong>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btn-new" type="button">Enviar outro comprovante</button>
+      </div>
+
+    </div>
+  </div>
+  <script type="module" src="./assets/js/comprovante-mobile.js"></script>
+  <script>
+    // Busca ao vivo na lista de pagamentos (pode rodar fora do módulo)
+    document.addEventListener('input', (e) => {
+      if (e.target.id !== 'search-payment') return;
+      const q = e.target.value.toLowerCase();
+      document.querySelectorAll('#payment-list .pay-card').forEach((card) => {
+        card.style.display = card.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
+  </script>
+</body>
+</html>

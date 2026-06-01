@@ -1,0 +1,23 @@
+project_id = "https://xyzpnuumdqhegxakkyws.supabase.co/functions/v1/google-contacts-sync/callback"
+
+[functions.sync-multas-detran]
+verify_jwt = true
+
+[functions.verificar-indicacao-condutor]
+verify_jwt = true
+
+[functions.gerar-guia-multa]
+verify_jwt = true
+
+[functions.notificar-multa]
+verify_jwt = true
+
+[functions.sync-veiculos-detran]
+verify_jwt = true
+
+# IMPORTANTE: o callback OAuth do Google abre direto pelo navegador/Google,
+# então não envia Authorization header do Supabase.
+# Por isso esta função precisa ficar pública no gateway.
+# A segurança do callback fica pelo parâmetro state + validação interna da função.
+[functions.google-contacts-sync]
+verify_jwt = false

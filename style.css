@@ -1,0 +1,39 @@
+
+body {
+  margin: 0;
+  font-family: 'DM Sans', Arial, sans-serif;
+  background: #020c07;
+  color: #e6f4ec;
+}
+
+.sidebar {
+  width: 260px;
+  height: 100vh;
+  background: linear-gradient(180deg, #010704 0%, #020a06 100%);
+  padding: 10px;
+  position: fixed;
+  left: 0;
+  top: 0;
+  border-right: 1px solid rgba(45, 212, 160, 0.08);
+}
+
+.menu-title {
+  padding: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  border-radius: 10px;
+  transition: background .14s ease;
+}
+
+.menu-title:hover {
+  background: rgba(0, 200, 122, 0.14);
+}
+
+.submenu {
+  padding-left: 10px;
+}
+
+.submenu-item {
+  padding: 6px;
+  font-size: 13px;
+}

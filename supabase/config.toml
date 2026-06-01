@@ -1,0 +1,22 @@
+project_id = "xyzpnuumdqhegxakkyws"
+
+[functions.sync-multas-detran]
+verify_jwt = true
+
+[functions.verificar-indicacao-condutor]
+verify_jwt = true
+
+[functions.gerar-guia-multa]
+verify_jwt = true
+
+[functions.notificar-multa]
+verify_jwt = true
+
+[functions.google-contacts-sync]
+verify_jwt = false
+
+[functions.ocr-documento]
+verify_jwt = true
+
+[functions.ocr-comprovante]
+verify_jwt = false
