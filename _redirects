@@ -1,0 +1,2 @@
+# Rotas do painel são tratadas pelo Worker/roteador principal.
+# NÃO redirecionar /frotas* para /painel/frotas*, pois isso causa loop quando o Worker remove o prefixo /painel.
