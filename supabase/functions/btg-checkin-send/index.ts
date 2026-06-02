@@ -17,12 +17,24 @@ function json(payload: unknown, status = 200) {
   });
 }
 
-// Normaliza telefone: 55DDD9XXXXXXXX (13 dígitos, sem +)
-function fmtPhone(raw: string): string {
+/**
+ * Retorna dois formatos de telefone para tentar no BotConversa:
+ *   - com13: 55DDD9XXXXXXXX  (13 dígitos — nosso padrão)
+ *   - com12: 55DDXXXXXXXX    (12 dígitos — BotConversa remove o 9 de transição BR)
+ */
+function fmtPhones(raw: string): { com13: string; com12: string } {
   const d = raw.replace(/\D/g, "");
-  if (!d) return "";
-  if (d.startsWith("55") && d.length >= 12) return d;
-  return "55" + d;
+  // Garante DDI 55
+  const base = (d.startsWith("55") && d.length >= 12) ? d : "55" + d;
+  // com13 = formato padrão (com o 9 de transição)
+  const com13 = base;
+  // com12 = remove o 9 logo após o DDD de 2 dígitos: 55XX9XXXXXXXX → 55XXXXXXXXX
+  // Estrutura: 55(2) + DDD(2) + 9 + 8dígitos = 13 → remove posição 4
+  let com12 = base;
+  if (base.length === 13 && base.charAt(4) === "9") {
+    com12 = base.slice(0, 4) + base.slice(5); // remove o 9
+  }
+  return { com13, com12 };
 }
 
 serve(async (req) => {
@@ -42,7 +54,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Busca API key
+    // API key
     const { data: seg } = await supabase
       .from("ti_integracao_segredos")
       .select("valor")
@@ -52,12 +64,16 @@ serve(async (req) => {
     const apiKey = seg?.valor;
     if (!apiKey) return json({ ok: false, error: "BOTCONVERSA_API_KEY não encontrada." }, 500);
 
-    // Carrega subscriber_ids conhecidos de botconversa_contatos (pelo telefone)
-    const phones = colaboradores.map(c => fmtPhone(c.telefone)).filter(Boolean);
+    // subscriber_ids conhecidos (busca pelos dois formatos de telefone)
+    const allPhones: string[] = [];
+    for (const c of colaboradores) {
+      const { com13, com12 } = fmtPhones(c.telefone);
+      allPhones.push(com13, com12);
+    }
     const { data: bcContatos } = await supabase
       .from("botconversa_contatos")
       .select("telefone, subscriber_id")
-      .in("telefone", phones);
+      .in("telefone", allPhones);
 
     const subscriberMap = new Map<string, string>();
     for (const c of (bcContatos || [])) {
@@ -65,23 +81,21 @@ serve(async (req) => {
     }
 
     const results: Array<{
-      nome: string; telefone: string; subscriber_id?: string; ok: boolean;
-      status_http?: number; detalhe?: string;
+      nome: string; telefone: string; subscriber_id?: string;
+      ok: boolean; status_http?: number; detalhe?: string;
     }> = [];
     const filaInserts: unknown[] = [];
 
     for (const { nome, telefone } of colaboradores) {
-      const phone = fmtPhone(telefone);
+      const { com13, com12 } = fmtPhones(telefone);
+      const phoneUsado = com13;
 
-      if (!phone || phone.length < 12) {
-        results.push({ nome, telefone, ok: false, detalhe: "Telefone inválido." });
-        continue;
-      }
-
-      // 1. Obtém subscriber_id — do cache ou sincronizando com BotConversa
-      let subscriberId = subscriberMap.get(phone);
+      // 1. Subscriber_id do cache (tenta ambos os formatos)
+      let subscriberId = subscriberMap.get(com13) ?? subscriberMap.get(com12);
 
       if (!subscriberId) {
+        // 2. Tenta sincronizar com BotConversa (cria ou recupera subscriber)
+        //    Envia o formato com12 pois é o que o BotConversa usa (+55DDD8dígitos)
         const nameParts = nome.trim().split(/\s+/);
         const syncRes = await fetch(
           `${BC_BASE}/webhook/whatsapp/${BOT_ID}/subscriber/`,
@@ -89,7 +103,7 @@ serve(async (req) => {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: apiKey },
             body: JSON.stringify({
-              phone,
+              phone: com12,
               first_name: nameParts[0] ?? nome,
               last_name: nameParts.slice(1).join(" ") || "",
             }),
@@ -98,23 +112,23 @@ serve(async (req) => {
         const syncData = await syncRes.json().catch(() => ({}));
         subscriberId = syncData?.id ? String(syncData.id) : undefined;
 
-        // Atualiza botconversa_contatos com o subscriber_id encontrado
         if (subscriberId) {
-          await supabase
-            .from("botconversa_contatos")
-            .update({ subscriber_id: subscriberId, updated_at: new Date().toISOString() })
-            .eq("telefone", phone)
-            .then(() => {});
+          // Salva subscriber_id nos dois formatos
+          await supabase.from("botconversa_contatos")
+            .upsert([
+              { telefone: com12, nome, subscriber_id: subscriberId, ativo: true, updated_at: new Date().toISOString() },
+              { telefone: com13, nome, subscriber_id: subscriberId, ativo: true, updated_at: new Date().toISOString() },
+            ], { onConflict: "telefone", ignoreDuplicates: false });
+        } else {
+          // Sem subscriber — loga a resposta para diagnóstico
+          const detalhe = `sync ${syncRes.status}: ${JSON.stringify(syncData)}`;
+          results.push({ nome, telefone: com12, ok: false, status_http: syncRes.status, detalhe });
+          filaInserts.push({ tipo: "flow", nome, telefone: phoneUsado, flow_id: String(FLOW_ID), status: "erro", erro: detalhe, origem: "btg-logistica" });
+          continue;
         }
       }
 
-      if (!subscriberId) {
-        results.push({ nome, telefone: phone, ok: false, detalhe: "Subscriber não encontrado no BotConversa." });
-        filaInserts.push({ tipo: "flow", nome, telefone: phone, flow_id: String(FLOW_ID), status: "erro", erro: "Subscriber não encontrado", origem: "btg-logistica" });
-        continue;
-      }
-
-      // 2. Dispara o fluxo via subscriber_id
+      // 3. Dispara o fluxo
       const flowRes = await fetch(
         `${BC_BASE}/webhook/whatsapp/${BOT_ID}/subscriber/${subscriberId}/run-flow/`,
         {
@@ -123,19 +137,17 @@ serve(async (req) => {
           body: JSON.stringify({ flow_id: FLOW_ID }),
         }
       );
-
       const flowData = await flowRes.json().catch(() => ({}));
       const ok = flowRes.ok;
 
       results.push({
-        nome, telefone: phone, subscriber_id: subscriberId,
+        nome, telefone: com12, subscriber_id: subscriberId,
         ok, status_http: flowRes.status,
         detalhe: ok ? undefined : JSON.stringify(flowData),
       });
 
       filaInserts.push({
-        tipo: "flow", nome, telefone: phone,
-        subscriber_id: subscriberId,
+        tipo: "flow", nome, telefone: phoneUsado, subscriber_id: subscriberId,
         flow_id: String(FLOW_ID),
         status: ok ? "enviado" : "erro",
         erro: ok ? null : JSON.stringify(flowData),
