@@ -95,18 +95,23 @@ serve(async (req) => {
       if (!subscriberId) {
         // 2. Tenta buscar/criar subscriber — testa GET e POST com dois formatos de header
         const nameParts = nome.trim().split(/\s+/);
+        // Formato com + e 9 dígitos (padrão BotConversa confirmado: +DDI+DDD+9dígitos)
+        const phoneE164 = "+" + com13; // +5561996306559
+
+        const syncBody13 = JSON.stringify({ phone: com13, first_name: nameParts[0] ?? nome, last_name: nameParts.slice(1).join(" ") || "" });
+        const syncBodyE164 = JSON.stringify({ phone: phoneE164, first_name: nameParts[0] ?? nome, last_name: nameParts.slice(1).join(" ") || "" });
+
         const attempts = [
-          // GET por telefone (com12 e com13, com + e sem)
-          { method: "GET", url: `${BC_BASE}/subscriber/?phone=%2B${com12}`, headers: { Authorization: apiKey } },
-          { method: "GET", url: `${BC_BASE}/subscriber/?phone=%2B${com12}`, headers: { "Api-Key": apiKey } },
-          { method: "GET", url: `${BC_BASE}/subscriber/?phone=${com13}`, headers: { Authorization: apiKey } },
-          // POST sync
-          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { Authorization: apiKey },
-            body: JSON.stringify({ phone: com13, first_name: nameParts[0] ?? nome, last_name: nameParts.slice(1).join(" ") || "" }) },
-          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { "Api-Key": apiKey },
-            body: JSON.stringify({ phone: com13, first_name: nameParts[0] ?? nome, last_name: nameParts.slice(1).join(" ") || "" }) },
-          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { Authorization: apiKey },
-            body: JSON.stringify({ phone: "+" + com12, first_name: nameParts[0] ?? nome, last_name: nameParts.slice(1).join(" ") || "" }) },
+          // GET por path — phone E.164 com 9 (mais provável)
+          { method: "GET", url: `${BC_BASE}/subscriber/${encodeURIComponent(phoneE164)}/`, headers: { Authorization: apiKey } },
+          { method: "GET", url: `${BC_BASE}/subscriber/${encodeURIComponent(phoneE164)}/`, headers: { "Api-Key": apiKey } },
+          // GET por query string
+          { method: "GET", url: `${BC_BASE}/subscriber/?phone=${encodeURIComponent(phoneE164)}`, headers: { Authorization: apiKey } },
+          // POST sync com E.164 (+DDI+DDD+9dígitos)
+          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { Authorization: apiKey }, body: syncBodyE164 },
+          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { "Api-Key": apiKey }, body: syncBodyE164 },
+          // POST sync sem +
+          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { Authorization: apiKey }, body: syncBody13 },
         ];
 
         let syncLog = "";
