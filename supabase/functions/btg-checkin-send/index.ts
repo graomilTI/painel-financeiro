@@ -42,7 +42,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Busca API key no banco
+    // Busca API key
     const { data: seg } = await supabase
       .from("ti_integracao_segredos")
       .select("valor")
@@ -52,46 +52,93 @@ serve(async (req) => {
     const apiKey = seg?.valor;
     if (!apiKey) return json({ ok: false, error: "BOTCONVERSA_API_KEY não encontrada." }, 500);
 
-    const results: Array<{ nome: string; telefone: string; ok: boolean; detalhe?: string }> = [];
+    // Carrega subscriber_ids conhecidos de botconversa_contatos (pelo telefone)
+    const phones = colaboradores.map(c => fmtPhone(c.telefone)).filter(Boolean);
+    const { data: bcContatos } = await supabase
+      .from("botconversa_contatos")
+      .select("telefone, subscriber_id")
+      .in("telefone", phones);
+
+    const subscriberMap = new Map<string, string>();
+    for (const c of (bcContatos || [])) {
+      if (c.subscriber_id) subscriberMap.set(c.telefone, c.subscriber_id);
+    }
+
+    const results: Array<{
+      nome: string; telefone: string; subscriber_id?: string; ok: boolean;
+      status_http?: number; detalhe?: string;
+    }> = [];
     const filaInserts: unknown[] = [];
 
     for (const { nome, telefone } of colaboradores) {
       const phone = fmtPhone(telefone);
 
       if (!phone || phone.length < 12) {
-        results.push({ nome, telefone, ok: false, detalhe: "Telefone inválido após formatação." });
+        results.push({ nome, telefone, ok: false, detalhe: "Telefone inválido." });
         continue;
       }
 
-      const res = await fetch(
-        `${BC_BASE}/webhook/whatsapp/${BOT_ID}/subscriber/run-flow/`,
+      // 1. Obtém subscriber_id — do cache ou sincronizando com BotConversa
+      let subscriberId = subscriberMap.get(phone);
+
+      if (!subscriberId) {
+        const nameParts = nome.trim().split(/\s+/);
+        const syncRes = await fetch(
+          `${BC_BASE}/webhook/whatsapp/${BOT_ID}/subscriber/`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: apiKey },
+            body: JSON.stringify({
+              phone,
+              first_name: nameParts[0] ?? nome,
+              last_name: nameParts.slice(1).join(" ") || "",
+            }),
+          }
+        );
+        const syncData = await syncRes.json().catch(() => ({}));
+        subscriberId = syncData?.id ? String(syncData.id) : undefined;
+
+        // Atualiza botconversa_contatos com o subscriber_id encontrado
+        if (subscriberId) {
+          await supabase
+            .from("botconversa_contatos")
+            .update({ subscriber_id: subscriberId, updated_at: new Date().toISOString() })
+            .eq("telefone", phone)
+            .then(() => {});
+        }
+      }
+
+      if (!subscriberId) {
+        results.push({ nome, telefone: phone, ok: false, detalhe: "Subscriber não encontrado no BotConversa." });
+        filaInserts.push({ tipo: "flow", nome, telefone: phone, flow_id: String(FLOW_ID), status: "erro", erro: "Subscriber não encontrado", origem: "btg-logistica" });
+        continue;
+      }
+
+      // 2. Dispara o fluxo via subscriber_id
+      const flowRes = await fetch(
+        `${BC_BASE}/webhook/whatsapp/${BOT_ID}/subscriber/${subscriberId}/run-flow/`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: apiKey },
-          body: JSON.stringify({ phone, flow_id: FLOW_ID }),
+          body: JSON.stringify({ flow_id: FLOW_ID }),
         }
       );
 
-      const data = await res.json().catch(() => ({}));
-      const ok = res.ok && data?.ok !== false && data?.id !== undefined
-        || res.status === 200 || res.status === 201;
+      const flowData = await flowRes.json().catch(() => ({}));
+      const ok = flowRes.ok;
 
       results.push({
-        nome,
-        telefone: phone,
-        ok,
-        status_http: res.status,
-        detalhe: ok ? undefined : JSON.stringify(data),
+        nome, telefone: phone, subscriber_id: subscriberId,
+        ok, status_http: flowRes.status,
+        detalhe: ok ? undefined : JSON.stringify(flowData),
       });
 
-      // Registra na fila como log
       filaInserts.push({
-        tipo: "flow",
-        nome,
-        telefone: phone,
+        tipo: "flow", nome, telefone: phone,
+        subscriber_id: subscriberId,
         flow_id: String(FLOW_ID),
         status: ok ? "enviado" : "erro",
-        erro: ok ? null : JSON.stringify(data),
+        erro: ok ? null : JSON.stringify(flowData),
         origem: "btg-logistica",
       });
     }
