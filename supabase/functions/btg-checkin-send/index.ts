@@ -17,16 +17,12 @@ function json(payload: unknown, status = 200) {
   });
 }
 
-// Normaliza telefone para E.164: +55DDD9XXXXXXXX (14 chars com +)
+// Normaliza telefone: 55DDD9XXXXXXXX (13 dígitos, sem +)
 function fmtPhone(raw: string): string {
   const d = raw.replace(/\D/g, "");
   if (!d) return "";
-  let digits = d;
-  // Se já tem DDI 55 e 13 dígitos, usa; senão adiciona 55
-  if (!(d.startsWith("55") && d.length >= 12)) {
-    digits = "55" + d;
-  }
-  return "+" + digits;
+  if (d.startsWith("55") && d.length >= 12) return d;
+  return "55" + d;
 }
 
 serve(async (req) => {
@@ -77,12 +73,14 @@ serve(async (req) => {
       );
 
       const data = await res.json().catch(() => ({}));
-      const ok = res.ok && data?.ok !== false;
+      const ok = res.ok && data?.ok !== false && data?.id !== undefined
+        || res.status === 200 || res.status === 201;
 
       results.push({
         nome,
         telefone: phone,
         ok,
+        status_http: res.status,
         detalhe: ok ? undefined : JSON.stringify(data),
       });
 
