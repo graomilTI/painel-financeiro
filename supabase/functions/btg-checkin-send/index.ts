@@ -6,7 +6,6 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BOT_ID  = "171749";
 const FLOW_ID = 8965976;
 const BC_BASE = "https://backend.botconversa.com.br/api/v1";
 
@@ -94,35 +93,46 @@ serve(async (req) => {
       let subscriberId = subscriberMap.get(com13) ?? subscriberMap.get(com12);
 
       if (!subscriberId) {
-        // 2. Tenta sincronizar com BotConversa (cria ou recupera subscriber)
-        //    Envia o formato com12 pois é o que o BotConversa usa (+55DDD8dígitos)
+        // 2. Tenta buscar/criar subscriber — testa GET e POST com dois formatos de header
         const nameParts = nome.trim().split(/\s+/);
-        const syncRes = await fetch(
-          `${BC_BASE}/webhook/whatsapp/${BOT_ID}/subscriber/`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: apiKey },
-            body: JSON.stringify({
-              phone: "+" + com12,
-              first_name: nameParts[0] ?? nome,
-              last_name: nameParts.slice(1).join(" ") || "",
-            }),
-          }
-        );
-        const syncData = await syncRes.json().catch(() => ({}));
-        subscriberId = syncData?.id ? String(syncData.id) : undefined;
+        const attempts = [
+          // GET por telefone (com12 e com13, com + e sem)
+          { method: "GET", url: `${BC_BASE}/subscriber/?phone=%2B${com12}`, headers: { Authorization: apiKey } },
+          { method: "GET", url: `${BC_BASE}/subscriber/?phone=%2B${com12}`, headers: { "Api-Key": apiKey } },
+          { method: "GET", url: `${BC_BASE}/subscriber/?phone=${com13}`, headers: { Authorization: apiKey } },
+          // POST sync
+          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { Authorization: apiKey },
+            body: JSON.stringify({ phone: com13, first_name: nameParts[0] ?? nome, last_name: nameParts.slice(1).join(" ") || "" }) },
+          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { "Api-Key": apiKey },
+            body: JSON.stringify({ phone: com13, first_name: nameParts[0] ?? nome, last_name: nameParts.slice(1).join(" ") || "" }) },
+          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { Authorization: apiKey },
+            body: JSON.stringify({ phone: "+" + com12, first_name: nameParts[0] ?? nome, last_name: nameParts.slice(1).join(" ") || "" }) },
+        ];
+
+        let syncLog = "";
+        for (const att of attempts) {
+          const r = await fetch(att.url, {
+            method: att.method,
+            headers: { "Content-Type": "application/json", ...att.headers },
+            body: (att as { body?: string }).body,
+          });
+          const d = await r.json().catch(() => ({}));
+          syncLog += `[${att.method} ${att.url.replace(BC_BASE,"")} ${r.status}] `;
+          const id = d?.id ?? d?.subscriber_id ?? d?.results?.[0]?.id;
+          if (id) { subscriberId = String(id); break; }
+        }
 
         if (subscriberId) {
-          // Salva subscriber_id nos dois formatos
-          await supabase.from("botconversa_contatos")
-            .upsert([
-              { telefone: com12, nome, subscriber_id: subscriberId, ativo: true, updated_at: new Date().toISOString() },
-              { telefone: com13, nome, subscriber_id: subscriberId, ativo: true, updated_at: new Date().toISOString() },
-            ], { onConflict: "telefone", ignoreDuplicates: false });
+          try {
+            await supabase.from("botconversa_contatos").upsert(
+              [{ telefone: com13, nome, subscriber_id: subscriberId, ativo: true, updated_at: new Date().toISOString() },
+               { telefone: com12, nome, subscriber_id: subscriberId, ativo: true, updated_at: new Date().toISOString() }],
+              { onConflict: "telefone", ignoreDuplicates: false }
+            );
+          } catch (_) {}
         } else {
-          // Sem subscriber — loga a resposta para diagnóstico
-          const detalhe = `sync ${syncRes.status}: ${JSON.stringify(syncData)}`;
-          results.push({ nome, telefone: com12, ok: false, status_http: syncRes.status, detalhe });
+          const detalhe = `Subscriber não encontrado. Tentativas: ${syncLog}`;
+          results.push({ nome, telefone: com12, ok: false, detalhe });
           filaInserts.push({ tipo: "flow", nome, telefone: phoneUsado, flow_id: String(FLOW_ID), status: "erro", erro: detalhe, origem: "btg-logistica" });
           continue;
         }
@@ -130,7 +140,7 @@ serve(async (req) => {
 
       // 3. Dispara o fluxo
       const flowRes = await fetch(
-        `${BC_BASE}/webhook/whatsapp/${BOT_ID}/subscriber/${subscriberId}/run-flow/`,
+        `${BC_BASE}/subscriber/${subscriberId}/run-flow/`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: apiKey },
