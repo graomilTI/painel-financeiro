@@ -6,8 +6,9 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const BOT_ID  = 171749;
 const FLOW_ID = 8965976;
-const BC_BASE = "https://backend.botconversa.com.br/api/v1";
+const BC_BASE = "https://backend.botconversa.com.br/api/v1/webhook";
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -17,23 +18,38 @@ function json(payload: unknown, status = 200) {
 }
 
 /**
- * Retorna dois formatos de telefone para tentar no BotConversa:
- *   - com13: 55DDD9XXXXXXXX  (13 dígitos — nosso padrão)
- *   - com12: 55DDXXXXXXXX    (12 dígitos — BotConversa remove o 9 de transição BR)
+ * Gera candidatos E.164 a partir do telefone armazenado (BR)
+ * Mesma lógica do script Google Apps do BotConversa
  */
-function fmtPhones(raw: string): { com13: string; com12: string } {
-  const d = raw.replace(/\D/g, "");
-  // Garante DDI 55
-  const base = (d.startsWith("55") && d.length >= 12) ? d : "55" + d;
-  // com13 = formato padrão (com o 9 de transição)
-  const com13 = base;
-  // com12 = remove o 9 logo após o DDD de 2 dígitos: 55XX9XXXXXXXX → 55XXXXXXXXX
-  // Estrutura: 55(2) + DDD(2) + 9 + 8dígitos = 13 → remove posição 4
-  let com12 = base;
-  if (base.length === 13 && base.charAt(4) === "9") {
-    com12 = base.slice(0, 4) + base.slice(5); // remove o 9
+function gerarCandidatos(raw: string): string[] {
+  const digits = raw.replace(/\D/g, "").replace(/^0+/, "");
+  if (!digits) return [];
+
+  let d = digits.startsWith("55") ? digits.slice(2) : digits;
+
+  const set = new Set<string>();
+
+  if (d.length === 10) {
+    const ddd = d.slice(0, 2), num8 = d.slice(2);
+    set.add(`+55${ddd}${num8}`);
+    set.add(`+55${ddd}9${num8}`);
   }
-  return { com13, com12 };
+  if (d.length === 11) {
+    const ddd = d.slice(0, 2), num9 = d.slice(2);
+    set.add(`+55${ddd}${num9}`);
+    if (num9.startsWith("9")) set.add(`+55${ddd}${num9.slice(1)}`);
+  }
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    set.add("+" + digits);
+  }
+
+  // Adiciona sem + também
+  const result: string[] = [];
+  for (const e of set) {
+    result.push(e);
+    result.push(e.replace("+", ""));
+  }
+  return [...new Set(result)];
 }
 
 serve(async (req) => {
@@ -63,17 +79,14 @@ serve(async (req) => {
     const apiKey = seg?.valor;
     if (!apiKey) return json({ ok: false, error: "BOTCONVERSA_API_KEY não encontrada." }, 500);
 
-    // subscriber_ids conhecidos (busca pelos dois formatos de telefone)
-    const allPhones: string[] = [];
-    for (const c of colaboradores) {
-      const { com13, com12 } = fmtPhones(c.telefone);
-      allPhones.push(com13, com12);
-    }
+    const bcHeaders = { "API-KEY": apiKey, "Accept": "application/json", "Content-Type": "application/json" };
+
+    // Cache de subscriber_ids
+    const allPhones = colaboradores.flatMap(c => gerarCandidatos(c.telefone));
     const { data: bcContatos } = await supabase
       .from("botconversa_contatos")
       .select("telefone, subscriber_id")
       .in("telefone", allPhones);
-
     const subscriberMap = new Map<string, string>();
     for (const c of (bcContatos || [])) {
       if (c.subscriber_id) subscriberMap.set(c.telefone, c.subscriber_id);
@@ -86,83 +99,59 @@ serve(async (req) => {
     const filaInserts: unknown[] = [];
 
     for (const { nome, telefone } of colaboradores) {
-      const { com13, com12 } = fmtPhones(telefone);
-      const phoneUsado = com13;
+      const candidatos = gerarCandidatos(telefone);
 
-      // 1. Subscriber_id do cache (tenta ambos os formatos)
-      let subscriberId = subscriberMap.get(com13) ?? subscriberMap.get(com12);
+      // 1. Busca subscriber_id no cache
+      let subscriberId: string | undefined;
+      for (const c of candidatos) {
+        if (subscriberMap.get(c)) { subscriberId = subscriberMap.get(c); break; }
+      }
 
+      // 2. Busca no BotConversa por get_by_phone
       if (!subscriberId) {
-        // 2. Tenta buscar/criar subscriber — testa GET e POST com dois formatos de header
-        const nameParts = nome.trim().split(/\s+/);
-        // Formato com + e 9 dígitos (padrão BotConversa confirmado: +DDI+DDD+9dígitos)
-        const phoneE164 = "+" + com13; // +5561996306559
-
-        const syncBody13 = JSON.stringify({ phone: com13, first_name: nameParts[0] ?? nome, last_name: nameParts.slice(1).join(" ") || "" });
-        const syncBodyE164 = JSON.stringify({ phone: phoneE164, first_name: nameParts[0] ?? nome, last_name: nameParts.slice(1).join(" ") || "" });
-
-        const attempts = [
-          // GET por path — phone E.164 com 9 (mais provável)
-          { method: "GET", url: `${BC_BASE}/subscriber/${encodeURIComponent(phoneE164)}/`, headers: { Authorization: apiKey } },
-          { method: "GET", url: `${BC_BASE}/subscriber/${encodeURIComponent(phoneE164)}/`, headers: { "Api-Key": apiKey } },
-          // GET por query string
-          { method: "GET", url: `${BC_BASE}/subscriber/?phone=${encodeURIComponent(phoneE164)}`, headers: { Authorization: apiKey } },
-          // POST sync com E.164 (+DDI+DDD+9dígitos)
-          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { Authorization: apiKey }, body: syncBodyE164 },
-          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { "Api-Key": apiKey }, body: syncBodyE164 },
-          // POST sync sem +
-          { method: "POST", url: `${BC_BASE}/subscriber/`, headers: { Authorization: apiKey }, body: syncBody13 },
-        ];
-
-        let syncLog = "";
-        for (const att of attempts) {
-          const r = await fetch(att.url, {
-            method: att.method,
-            headers: { "Content-Type": "application/json", ...att.headers },
-            body: (att as { body?: string }).body,
-          });
-          const d = await r.json().catch(() => ({}));
-          syncLog += `[${att.method} ${att.url.replace(BC_BASE,"")} ${r.status}] `;
-          const id = d?.id ?? d?.subscriber_id ?? d?.results?.[0]?.id;
-          if (id) { subscriberId = String(id); break; }
-        }
-
-        if (subscriberId) {
-          try {
-            await supabase.from("botconversa_contatos").upsert(
-              [{ telefone: com13, nome, subscriber_id: subscriberId, ativo: true, updated_at: new Date().toISOString() },
-               { telefone: com12, nome, subscriber_id: subscriberId, ativo: true, updated_at: new Date().toISOString() }],
-              { onConflict: "telefone", ignoreDuplicates: false }
-            );
-          } catch (_) {}
-        } else {
-          const detalhe = `Subscriber não encontrado. Tentativas: ${syncLog}`;
-          results.push({ nome, telefone: com12, ok: false, detalhe });
-          filaInserts.push({ tipo: "flow", nome, telefone: phoneUsado, flow_id: String(FLOW_ID), status: "erro", erro: detalhe, origem: "btg-logistica" });
-          continue;
+        for (const phone of candidatos) {
+          const url = `${BC_BASE}/subscriber/get_by_phone/${encodeURIComponent(phone)}/`;
+          const r = await fetch(url, { method: "GET", headers: bcHeaders });
+          if (r.status === 200) {
+            const d = await r.json().catch(() => ({}));
+            if (d?.id) { subscriberId = String(d.id); break; }
+          }
         }
       }
 
-      // 3. Dispara o fluxo
-      const flowRes = await fetch(
-        `${BC_BASE}/subscriber/${subscriberId}/run-flow/`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: apiKey },
-          body: JSON.stringify({ flow_id: FLOW_ID }),
-        }
-      );
+      if (!subscriberId) {
+        const detalhe = `Subscriber não encontrado para nenhum dos telefones: ${candidatos.slice(0, 4).join(", ")}`;
+        results.push({ nome, telefone, ok: false, detalhe });
+        filaInserts.push({ tipo: "flow", nome, telefone, flow_id: String(FLOW_ID), status: "erro", erro: detalhe, origem: "btg-logistica" });
+        continue;
+      }
+
+      // 3. Salva subscriber_id no cache
+      try {
+        await supabase.from("botconversa_contatos").upsert(
+          candidatos.map(t => ({ telefone: t, nome, subscriber_id: subscriberId, ativo: true, updated_at: new Date().toISOString() })),
+          { onConflict: "telefone", ignoreDuplicates: false }
+        );
+      } catch (_) {}
+
+      // 4. Envia fluxo
+      const sendUrl = `${BC_BASE}/subscriber/${subscriberId}/send_flow/`;
+      const flowRes = await fetch(sendUrl, {
+        method: "POST",
+        headers: bcHeaders,
+        body: JSON.stringify({ flow_id: FLOW_ID, flow: String(FLOW_ID), bot_id: BOT_ID }),
+      });
       const flowData = await flowRes.json().catch(() => ({}));
-      const ok = flowRes.ok;
+      const ok = flowRes.status >= 200 && flowRes.status < 300;
 
       results.push({
-        nome, telefone: com12, subscriber_id: subscriberId,
+        nome, telefone, subscriber_id: subscriberId,
         ok, status_http: flowRes.status,
         detalhe: ok ? undefined : JSON.stringify(flowData),
       });
 
       filaInserts.push({
-        tipo: "flow", nome, telefone: phoneUsado, subscriber_id: subscriberId,
+        tipo: "flow", nome, telefone, subscriber_id: subscriberId,
         flow_id: String(FLOW_ID),
         status: ok ? "enviado" : "erro",
         erro: ok ? null : JSON.stringify(flowData),
@@ -174,8 +163,7 @@ serve(async (req) => {
       try { await supabase.from("botconversa_fila").insert(filaInserts); } catch (_) {}
     }
 
-    const totalOk = results.filter((r) => r.ok).length;
-    return json({ ok: true, total: results.length, enviados: totalOk, results });
+    return json({ ok: true, total: results.length, enviados: results.filter(r => r.ok).length, results });
   } catch (err) {
     return json({ ok: false, error: (err as Error).message }, 500);
   }
