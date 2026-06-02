@@ -103,7 +103,7 @@ serve(async (req) => {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: apiKey },
             body: JSON.stringify({
-              phone: com12,
+              phone: "+" + com12,
               first_name: nameParts[0] ?? nome,
               last_name: nameParts.slice(1).join(" ") || "",
             }),
