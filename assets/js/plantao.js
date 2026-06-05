@@ -844,7 +844,10 @@ function renderSetores() {
             <h3>${esc(setor)}</h3>
             <div class="plantao-meta">${rows.length} plantonista(s) cadastrado(s)</div>
           </div>
-          ${DEFAULT_SETORES.includes(setor) ? '' : `<button type="button" class="plantao-btn danger" data-remove-setor="${esc(setor)}">Remover setor</button>`}
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button type="button" class="plantao-btn secondary" data-imagem-setor="${esc(setor)}">Imagem do setor</button>
+            ${DEFAULT_SETORES.includes(setor) ? '' : `<button type="button" class="plantao-btn danger" data-remove-setor="${esc(setor)}">Remover setor</button>`}
+          </div>
         </div>
 
         <div class="plantao-add-grid">
@@ -919,6 +922,17 @@ function renderSetores() {
       escala[setor].splice(Number(btn.dataset.removeRow), 1);
       renderSetores();
       updateKpis();
+    });
+  });
+
+  holder.querySelectorAll('[data-imagem-setor]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const setor = btn.dataset.imagemSetor;
+      renderDivulgacaoControls();
+      const selectSetor = document.getElementById('plantaoImgSetor');
+      if (selectSetor) selectSetor.value = setor;
+      switchTab('divulgacao');
+      await renderImagemPlantao();
     });
   });
 
@@ -1167,13 +1181,13 @@ function drawRoundRect(ctx, x, y, w, h, r) {
 }
 
 
-function drawBackground(ctx) {
-  const grad = ctx.createLinearGradient(0, 0, 0, IMG_H);
+function drawBackground(ctx, canvasH = IMG_H) {
+  const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
   grad.addColorStop(0, '#04110c');
   grad.addColorStop(.55, '#071b14');
   grad.addColorStop(1, '#0a241b');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, IMG_W, IMG_H);
+  ctx.fillRect(0, 0, IMG_W, canvasH);
 
   const glow1 = ctx.createRadialGradient(180, 170, 40, 180, 170, 280);
   glow1.addColorStop(0, 'rgba(111,208,165,.18)');
@@ -1363,17 +1377,27 @@ function getRowsForDivulgacao() {
 async function renderImagemPlantao() {
   const canvas = document.getElementById('plantaoCanvas');
   if (!canvas) return;
+
+  const rows = getRowsForDivulgacao();
+  const cardH = 190;
+  const gap = 18;
+  const cardStartY = 430;
+  const footerH = 110;
+  const neededH = rows.length > 0
+    ? cardStartY + rows.length * (cardH + gap) - gap + footerH
+    : IMG_H;
+  const canvasH = Math.max(IMG_H, neededH);
+
   canvas.width = IMG_W;
-  canvas.height = IMG_H;
+  canvas.height = canvasH;
   const ctx = canvas.getContext('2d');
 
-  drawBackground(ctx);
+  drawBackground(ctx, canvasH);
   await drawLogo(ctx);
 
   const dataIni = document.getElementById('plantaoImgData')?.value || document.getElementById('plantaoData')?.value || '';
   const dataFim = document.getElementById('plantaoImgDataFim')?.value || document.getElementById('plantaoDataFim')?.value || dataIni;
   const titleSetor = document.getElementById('plantaoImgSetor')?.value || 'todos';
-  const rows = getRowsForDivulgacao();
 
   const title = 'Escala de Plantão';
   const subtitle = titleSetor === 'todos' ? 'Todos os setores' : `Setor: ${titleSetor}`;
@@ -1408,6 +1432,8 @@ async function renderImagemPlantao() {
 
   drawRoundRectFilled(ctx, 70, 400, 940, 2, 2, 'rgba(111,208,165,.18)');
 
+  let lastY = cardStartY;
+
   if (!rows.length) {
     drawRoundRectFilled(ctx, 70, 475, 940, 220, 28, 'rgba(7,18,14,.88)', 'rgba(111,208,165,.14)', 1.2);
     ctx.fillStyle = '#ffffff';
@@ -1418,41 +1444,26 @@ async function renderImagemPlantao() {
     ctx.font = '28px Arial';
     ctx.fillText('Ajuste os filtros e atualize a imagem.', IMG_W / 2, 620);
     ctx.textAlign = 'left';
+    lastY = 720;
   } else {
-    let y = 430;
-    const gap = 18;
-    const cardW = 940;
-    const cardH = 190;
-    const availableHeight = 1320 - y;
-    const max = Math.max(1, Math.floor((availableHeight + gap) / (cardH + gap)));
-
-    rows.slice(0, max).forEach((row) => {
-      drawPersonCard(ctx, row, 70, y, cardW);
+    let y = cardStartY;
+    rows.forEach((row) => {
+      drawPersonCard(ctx, row, 70, y, 940);
       y += cardH + gap;
     });
-
-    if (rows.length > max) {
-      drawPill(ctx, 70, 1332, `+ ${rows.length - max} plantonista(s) continuam na escala completa do painel`, {
-        bg: 'rgba(255,255,255,.05)',
-        border: 'rgba(111,208,165,.18)',
-        color: '#d8ffea',
-        font: 'bold 18px Arial',
-        px: 14,
-        py: 8,
-        radius: 14,
-      });
-    }
+    lastY = y;
   }
 
+  const footerLineY = lastY + 10;
   ctx.fillStyle = 'rgba(111,208,165,.18)';
-  ctx.fillRect(70, 1450, 940, 2);
+  ctx.fillRect(70, footerLineY, 940, 2);
   ctx.fillStyle = '#e2e2f0';
   ctx.font = '24px Arial';
   ctx.textAlign = 'left';
-  ctx.fillText('Grão 1000 • Escala de Plantão', 70, 1472);
+  ctx.fillText('Grão 1000 • Escala de Plantão', 70, footerLineY + 22);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#6fd0a5';
-  ctx.fillText('www.grao1000.com.br', 1010, 1472);
+  ctx.fillText('www.grao1000.com.br', 1010, footerLineY + 22);
   ctx.textAlign = 'left';
 }
 
