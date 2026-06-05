@@ -647,8 +647,6 @@ async function abrirImagemSingleDate(dataPlantao) {
   if (imgFim) imgFim.value = dataPlantao;
   await loadEscalaSingleDate(dataPlantao);
   switchTab('divulgacao');
-  renderDivulgacaoControls();
-  await renderImagemPlantao();
 }
 
 function aggregateEscalasByDate(rows) {
@@ -844,10 +842,7 @@ function renderSetores() {
             <h3>${esc(setor)}</h3>
             <div class="plantao-meta">${rows.length} plantonista(s) cadastrado(s)</div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button type="button" class="plantao-btn secondary" data-imagem-setor="${esc(setor)}">Imagem do setor</button>
-            ${DEFAULT_SETORES.includes(setor) ? '' : `<button type="button" class="plantao-btn danger" data-remove-setor="${esc(setor)}">Remover setor</button>`}
-          </div>
+          ${DEFAULT_SETORES.includes(setor) ? '' : `<button type="button" class="plantao-btn danger" data-remove-setor="${esc(setor)}">Remover setor</button>`}
         </div>
 
         <div class="plantao-add-grid">
@@ -922,17 +917,6 @@ function renderSetores() {
       escala[setor].splice(Number(btn.dataset.removeRow), 1);
       renderSetores();
       updateKpis();
-    });
-  });
-
-  holder.querySelectorAll('[data-imagem-setor]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const setor = btn.dataset.imagemSetor;
-      renderDivulgacaoControls();
-      const selectSetor = document.getElementById('plantaoImgSetor');
-      if (selectSetor) selectSetor.value = setor;
-      switchTab('divulgacao');
-      await renderImagemPlantao();
     });
   });
 
@@ -1349,18 +1333,19 @@ function drawPersonCard(ctx, row, x, y, maxW) {
   return cardH;
 }
 
-function getRowsForDivulgacao() {
+function getRowsForDivulgacao(setorFiltro = 'todos') {
   const dataIni = document.getElementById('plantaoImgData')?.value || document.getElementById('plantaoData')?.value || '';
   const dataFim = document.getElementById('plantaoImgDataFim')?.value || document.getElementById('plantaoDataFim')?.value || dataIni;
-  const setorFiltro = document.getElementById('plantaoImgSetor')?.value || 'todos';
 
   const rows = [];
   Object.entries(escala).forEach(([setor, pessoas]) => {
     pessoas.forEach((p) => {
       const date = p.data_plantao || dataIni;
-      if (date >= dataIni && date <= dataFim && (setorFiltro === 'todos' || setorFiltro === setor)) {
-        rows.push({ ...p, setor, data_plantao: date });
-      }
+      const inRange = date >= dataIni && date <= dataFim;
+      const inSetor = setorFiltro === 'todos' ? true
+        : setorFiltro === 'exceto_troca' ? setor !== 'Troca de notas'
+        : setor === setorFiltro;
+      if (inRange && inSetor) rows.push({ ...p, setor, data_plantao: date });
     });
   });
 
@@ -1374,11 +1359,11 @@ function getRowsForDivulgacao() {
   return rows;
 }
 
-async function renderImagemPlantao() {
-  const canvas = document.getElementById('plantaoCanvas');
+async function renderImagemPlantao(canvasEl = null, setorFiltro = 'todos', subtitleLabel = '') {
+  const canvas = canvasEl || document.getElementById('plantaoCanvasGeral');
   if (!canvas) return;
 
-  const rows = getRowsForDivulgacao();
+  const rows = getRowsForDivulgacao(setorFiltro);
   const cardH = 190;
   const gap = 18;
   const cardStartY = 430;
@@ -1397,10 +1382,9 @@ async function renderImagemPlantao() {
 
   const dataIni = document.getElementById('plantaoImgData')?.value || document.getElementById('plantaoData')?.value || '';
   const dataFim = document.getElementById('plantaoImgDataFim')?.value || document.getElementById('plantaoDataFim')?.value || dataIni;
-  const titleSetor = document.getElementById('plantaoImgSetor')?.value || 'todos';
 
   const title = 'Escala de Plantão';
-  const subtitle = titleSetor === 'todos' ? 'Todos os setores' : `Setor: ${titleSetor}`;
+  const subtitle = subtitleLabel || (setorFiltro === 'exceto_troca' ? 'Escala Geral' : setorFiltro === 'todos' ? 'Todos os setores' : `Setor: ${setorFiltro}`);
   const dateText = dataIni === dataFim ? formatDateBR(dataIni) : `${formatDateBR(dataIni)} a ${formatDateBR(dataFim)}`;
 
   ctx.fillStyle = '#ffffff';
@@ -1467,21 +1451,26 @@ async function renderImagemPlantao() {
   ctx.textAlign = 'left';
 }
 
-function baixarImagemPlantao() {
-  const canvas = document.getElementById('plantaoCanvas');
+function baixarImagemPlantao(canvasEl = null, sufixo = '') {
+  const canvas = canvasEl || document.getElementById('plantaoCanvasGeral');
   if (!canvas) return;
   const dataIni = document.getElementById('plantaoImgData')?.value || todayISO();
   const link = document.createElement('a');
-  link.download = `plantao_${dataIni}.png`;
+  link.download = `plantao_${dataIni}${sufixo ? '_' + sufixo : ''}.png`;
   link.href = canvas.toDataURL('image/png');
   link.click();
 }
 
-function renderDivulgacaoControls() {
-  const select = document.getElementById('plantaoImgSetor');
-  if (!select) return;
-  select.innerHTML = `<option value="todos">Todos os setores</option>${setores.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}`;
+async function renderAmbasImagens() {
+  const canvasGeral = document.getElementById('plantaoCanvasGeral');
+  const canvasTroca = document.getElementById('plantaoCanvasTroca');
+  await Promise.all([
+    canvasGeral ? renderImagemPlantao(canvasGeral, 'exceto_troca', 'Escala Geral') : Promise.resolve(),
+    canvasTroca ? renderImagemPlantao(canvasTroca, 'Troca de notas', 'Troca de Notas') : Promise.resolve(),
+  ]);
 }
+
+function renderDivulgacaoControls() {}
 
 function renderConsultaSetores() {
   const select = document.getElementById('consultaSetor');
@@ -1498,8 +1487,7 @@ function switchTab(tab) {
   if (tab === 'consulta') { renderConsultaSetores(); consultarDatasPlantao(); }
   if (tab === 'contatos') renderContatosTable();
   if (tab === 'divulgacao') {
-    renderDivulgacaoControls();
-    renderImagemPlantao();
+    renderAmbasImagens();
   }
 }
 
@@ -1724,27 +1712,34 @@ function renderPage(content) {
       <div class="plantao-panel" data-panel="divulgacao">
         <div class="plantao-card">
           <div class="plantao-grid">
-            <div class="plantao-field third">
-              <label class="plantao-label" for="plantaoImgData">Data inicial da imagem</label>
+            <div class="plantao-field half">
+              <label class="plantao-label" for="plantaoImgData">Data inicial</label>
               <input class="plantao-input" type="date" id="plantaoImgData" value="${dataIni}" />
             </div>
-            <div class="plantao-field third">
-              <label class="plantao-label" for="plantaoImgDataFim">Data final da imagem</label>
+            <div class="plantao-field half">
+              <label class="plantao-label" for="plantaoImgDataFim">Data final</label>
               <input class="plantao-input" type="date" id="plantaoImgDataFim" value="${dataFim}" />
-            </div>
-            <div class="plantao-field third">
-              <label class="plantao-label" for="plantaoImgSetor">Setor</label>
-              <select class="plantao-select" id="plantaoImgSetor"></select>
             </div>
           </div>
           <div class="plantao-actions" style="margin-top:14px;">
-            <button type="button" class="plantao-btn secondary" id="btnAtualizarImagem">Atualizar imagem</button>
-            <button type="button" class="plantao-btn primary" id="btnBaixarImagem">Baixar PNG</button>
+            <button type="button" class="plantao-btn secondary" id="btnAtualizarImagem">Atualizar imagens</button>
           </div>
-          <p class="plantao-meta">A arte usa o padrão escuro/verde dos modelos enviados. A versão resumida exibe até 5 plantonistas por imagem; se tiver mais, a escala completa permanece salva no painel.</p>
         </div>
+
         <div class="plantao-canvas-wrap plantao-card">
-          <canvas id="plantaoCanvas" width="${IMG_W}" height="${IMG_H}"></canvas>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <p class="plantao-meta" style="margin:0;font-weight:800;">Escala Geral — RH, Caixas, Frotas, Logística</p>
+            <button type="button" class="plantao-btn primary" id="btnBaixarImagemGeral">Baixar PNG</button>
+          </div>
+          <canvas id="plantaoCanvasGeral" width="${IMG_W}" height="${IMG_H}"></canvas>
+        </div>
+
+        <div class="plantao-canvas-wrap plantao-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <p class="plantao-meta" style="margin:0;font-weight:800;">Troca de Notas</p>
+            <button type="button" class="plantao-btn primary" id="btnBaixarImagemTroca">Baixar PNG</button>
+          </div>
+          <canvas id="plantaoCanvasTroca" width="${IMG_W}" height="${IMG_H}"></canvas>
         </div>
       </div>
     </section>
@@ -1772,8 +1767,9 @@ function renderPage(content) {
     window.__plantaoConsultaTimer = setTimeout(consultarDatasPlantao, 250);
   });
   document.getElementById('plantaoContatoBusca')?.addEventListener('input', renderContatosTable);
-  document.getElementById('btnAtualizarImagem')?.addEventListener('click', renderImagemPlantao);
-  document.getElementById('btnBaixarImagem')?.addEventListener('click', baixarImagemPlantao);
+  document.getElementById('btnAtualizarImagem')?.addEventListener('click', renderAmbasImagens);
+  document.getElementById('btnBaixarImagemGeral')?.addEventListener('click', () => baixarImagemPlantao(document.getElementById('plantaoCanvasGeral'), 'geral'));
+  document.getElementById('btnBaixarImagemTroca')?.addEventListener('click', () => baixarImagemPlantao(document.getElementById('plantaoCanvasTroca'), 'troca_notas'));
   document.getElementById('plantaoData')?.addEventListener('change', () => {
     const ini = document.getElementById('plantaoData').value;
     document.getElementById('plantaoDataFim').value = addDaysISO(ini, 1);
