@@ -214,8 +214,14 @@ function injectPlantaoStyles() {
     .plantao-table{width:100%;min-width:920px;border-collapse:collapse;background:#15152a}
     .plantao-table th,.plantao-table td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
     .plantao-table th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
-    .plantao-canvas-wrap{display:grid;gap:12px;justify-items:start}
-    #plantaoCanvas{max-width:100%;background:#050c09;border:1px solid var(--line);border-radius:18px}
+    .plantao-div-grid{display:grid;gap:20px;margin-top:4px}
+    .plantao-div-card{background:var(--bg-card);border:1px solid var(--line);border-radius:22px;padding:20px;box-shadow:var(--shadow-soft)}
+    .plantao-div-head{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid rgba(111,208,165,.12)}
+    .plantao-div-label{display:flex;align-items:center;gap:10px}
+    .plantao-div-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:rgba(22,101,52,.32);border:1px solid rgba(111,208,165,.28);color:#6fd0a5;font-size:12px;font-weight:900;letter-spacing:.04em;flex-shrink:0}
+    .plantao-div-title{font-size:15px;font-weight:900;color:var(--text)}
+    .plantao-div-sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .plantao-canvas-img{display:block;max-width:100%;background:#050c09;border:1px solid rgba(111,208,165,.10);border-radius:14px}
     .plantao-mini-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
     .plantao-mini-kpi{background:#15152a;border:1px solid var(--line);border-radius:16px;padding:12px}
     .plantao-mini-kpi b{display:block;font-size:22px;margin-top:4px}
@@ -1726,20 +1732,34 @@ function renderPage(content) {
           </div>
         </div>
 
-        <div class="plantao-canvas-wrap plantao-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <p class="plantao-meta" style="margin:0;font-weight:800;">Escala Geral — RH, Caixas, Frotas, Logística</p>
-            <button type="button" class="plantao-btn primary" id="btnBaixarImagemGeral">Baixar PNG</button>
+        <div class="plantao-div-grid">
+          <div class="plantao-div-card">
+            <div class="plantao-div-head">
+              <div class="plantao-div-label">
+                <span class="plantao-div-num">01</span>
+                <div>
+                  <div class="plantao-div-title">Escala Geral</div>
+                  <div class="plantao-div-sub">RH · Caixas · Frotas · Logística</div>
+                </div>
+              </div>
+              <button type="button" class="plantao-btn primary" id="btnBaixarImagemGeral">Baixar PNG</button>
+            </div>
+            <canvas id="plantaoCanvasGeral" class="plantao-canvas-img" width="${IMG_W}" height="${IMG_H}"></canvas>
           </div>
-          <canvas id="plantaoCanvasGeral" width="${IMG_W}" height="${IMG_H}"></canvas>
-        </div>
 
-        <div class="plantao-canvas-wrap plantao-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <p class="plantao-meta" style="margin:0;font-weight:800;">Troca de Notas</p>
-            <button type="button" class="plantao-btn primary" id="btnBaixarImagemTroca">Baixar PNG</button>
+          <div class="plantao-div-card">
+            <div class="plantao-div-head">
+              <div class="plantao-div-label">
+                <span class="plantao-div-num">02</span>
+                <div>
+                  <div class="plantao-div-title">Troca de Notas</div>
+                  <div class="plantao-div-sub">Setor exclusivo</div>
+                </div>
+              </div>
+              <button type="button" class="plantao-btn primary" id="btnBaixarImagemTroca">Baixar PNG</button>
+            </div>
+            <canvas id="plantaoCanvasTroca" class="plantao-canvas-img" width="${IMG_W}" height="${IMG_H}"></canvas>
           </div>
-          <canvas id="plantaoCanvasTroca" width="${IMG_W}" height="${IMG_H}"></canvas>
         </div>
       </div>
     </section>
