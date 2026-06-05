@@ -4,8 +4,8 @@ import { supabase } from './supabaseClient.js';
 const DEFAULT_SETORES = ['RH', 'Caixas', 'Frotas', 'Logística', 'Troca de notas'];
 const STORAGE_KEY = 'painel_rh_plantao_setores_extra';
 const TEMPLATE_STORAGE_KEY = 'painel_rh_plantao_modelo_padrao';
-const IMG_W = 1080;
-const IMG_H = 1530;
+const IMG_W = 1600;
+const IMG_H = 900;
 
 let setores = [...DEFAULT_SETORES];
 let colaboradores = [];
@@ -1171,172 +1171,326 @@ function drawRoundRect(ctx, x, y, w, h, r) {
 }
 
 
-function drawBackground(ctx, canvasH = IMG_H) {
-  const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
-  grad.addColorStop(0, '#04110c');
-  grad.addColorStop(.55, '#071b14');
-  grad.addColorStop(1, '#0a241b');
+function drawBackground(ctx, w, h) {
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, '#020c05');
+  grad.addColorStop(0.5, '#030e07');
+  grad.addColorStop(1, '#051209');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, IMG_W, canvasH);
+  ctx.fillRect(0, 0, w, h);
 
-  const glow1 = ctx.createRadialGradient(180, 170, 40, 180, 170, 280);
-  glow1.addColorStop(0, 'rgba(111,208,165,.18)');
-  glow1.addColorStop(1, 'rgba(111,208,165,0)');
+  const glow1 = ctx.createRadialGradient(120, h * 0.45, 0, 120, h * 0.45, 320);
+  glow1.addColorStop(0, 'rgba(22,163,74,.2)');
+  glow1.addColorStop(1, 'rgba(22,163,74,0)');
   ctx.fillStyle = glow1;
-  ctx.fillRect(0, 0, IMG_W, IMG_H);
+  ctx.fillRect(0, 0, w, h);
 
-  const glow2 = ctx.createRadialGradient(960, 90, 20, 960, 90, 220);
-  glow2.addColorStop(0, 'rgba(63,168,120,.16)');
-  glow2.addColorStop(1, 'rgba(63,168,120,0)');
+  const glow2 = ctx.createRadialGradient(w * 0.8, h * 0.1, 0, w * 0.8, h * 0.1, 280);
+  glow2.addColorStop(0, 'rgba(34,197,94,.10)');
+  glow2.addColorStop(1, 'rgba(34,197,94,0)');
   ctx.fillStyle = glow2;
-  ctx.fillRect(0, 0, IMG_W, IMG_H);
+  ctx.fillRect(0, 0, w, h);
 
   ctx.save();
-  ctx.globalAlpha = .08;
+  ctx.globalAlpha = 0.042;
   ctx.strokeStyle = '#6fd0a5';
-  ctx.lineWidth = 2;
-  for (let i = 0; i < 20; i++) {
-    const x = 50 + (i % 4) * 155 + (i % 2 ? 36 : 0);
-    const y = 110 + Math.floor(i / 4) * 185;
-    const r = 42;
+  ctx.lineWidth = 1.2;
+  const sp = 72;
+  for (let i = -3; i < Math.ceil((w + h) / sp) + 2; i++) {
     ctx.beginPath();
-    for (let a = 0; a < 6; a++) {
-      const px = x + r * Math.cos(Math.PI / 3 * a);
-      const py = y + r * Math.sin(Math.PI / 3 * a);
-      if (a === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
+    ctx.moveTo(i * sp, 0);
+    ctx.lineTo(i * sp - h * 0.55, h);
     ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.052;
+  ctx.strokeStyle = '#6fd0a5';
+  ctx.lineWidth = 1;
+  const hexR = 26;
+  const hexW = hexR * Math.sqrt(3);
+  const hexH2 = hexR * 2;
+  for (let row = -1; row < Math.ceil(h / (hexH2 * 0.75)) + 2; row++) {
+    for (let col = -1; col < Math.ceil(w / hexW) + 2; col++) {
+      const hx = col * hexW + (row % 2 === 0 ? 0 : hexW / 2);
+      const hy = row * hexH2 * 0.75;
+      ctx.beginPath();
+      for (let a = 0; a < 6; a++) {
+        const ang = Math.PI / 3 * a - Math.PI / 6;
+        const px = hx + hexR * Math.cos(ang);
+        const py = hy + hexR * Math.sin(ang);
+        a === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
 
-async function drawLogo(ctx) {
+async function drawLogo(ctx, x = 25, y = 25, w = 150, h = 62) {
   try {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = './logo-grao1000.svg';
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = reject;
-    });
-    ctx.drawImage(img, 70, 56, 248, 102);
+    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
+    ctx.drawImage(img, x, y, w, h);
   } catch {
     ctx.fillStyle = '#6fd0a5';
-    ctx.font = 'bold 50px Arial';
-    ctx.fillText('GRÃO 1000', 70, 118);
-    ctx.font = '22px Arial';
-    ctx.fillText('Rastreabilidade e Logística', 72, 148);
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('GRÃO 1000', x, y + 6);
+    ctx.font = '13px Arial';
+    ctx.fillText('Rastreabilidade e Logística', x, y + 40);
   }
 }
 
 function drawRoundRectFilled(ctx, x, y, w, h, r, fillStyle, strokeStyle = '', lineWidth = 1) {
   drawRoundRect(ctx, x, y, w, h, r);
-  if (fillStyle) {
-    ctx.fillStyle = fillStyle;
-    ctx.fill();
-  }
-  if (strokeStyle) {
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = lineWidth;
-    ctx.stroke();
-  }
+  if (fillStyle) { ctx.fillStyle = fillStyle; ctx.fill(); }
+  if (strokeStyle) { ctx.strokeStyle = strokeStyle; ctx.lineWidth = lineWidth; ctx.stroke(); }
 }
 
 function fitText(ctx, value, maxWidth) {
   let text = String(value || '');
   if (!text) return '';
   if (ctx.measureText(text).width <= maxWidth) return text;
-  while (text.length > 4 && ctx.measureText(`${text}…`).width > maxWidth) {
-    text = text.slice(0, -1);
-  }
+  while (text.length > 4 && ctx.measureText(`${text}…`).width > maxWidth) text = text.slice(0, -1);
   return `${text}…`;
 }
 
-function drawPill(ctx, x, y, text, options = {}) {
-  const {
-    bg = 'rgba(22,101,52,.22)',
-    border = 'rgba(111,208,165,.28)',
-    color = '#dcfce7',
-    font = 'bold 22px Arial',
-    px = 16,
-    py = 10,
-    radius = 999,
-  } = options;
-
+function drawCalendarIcon(ctx, cx, cy, s) {
   ctx.save();
-  ctx.font = font;
-  const w = Math.ceil(ctx.measureText(text).width + px * 2);
-  const h = 22 + py * 2;
-  drawRoundRectFilled(ctx, x, y, w, h, radius, bg, border, 1.5);
-  ctx.fillStyle = color;
+  ctx.strokeStyle = '#6fd0a5';
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = 'round';
+  ctx.strokeRect(cx - s * 0.85, cy - s * 0.6, s * 1.7, s * 1.3);
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.85, cy - s * 0.15); ctx.lineTo(cx + s * 0.85, cy - s * 0.15);
+  ctx.moveTo(cx - s * 0.28, cy - s * 0.9); ctx.lineTo(cx - s * 0.28, cy - s * 0.28);
+  ctx.moveTo(cx + s * 0.28, cy - s * 0.9); ctx.lineTo(cx + s * 0.28, cy - s * 0.28);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPhoneIcon(ctx, cx, cy, s) {
+  ctx.save();
+  ctx.strokeStyle = '#6fd0a5';
+  ctx.lineWidth = 1.7;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.5, cy - s * 0.8);
+  ctx.lineTo(cx - s * 0.5, cy + s * 0.8);
+  ctx.arcTo(cx - s * 0.5, cy + s * 0.8, cx + s * 0.5, cy + s * 0.8, s * 0.3);
+  ctx.lineTo(cx + s * 0.5, cy - s * 0.8);
+  ctx.arcTo(cx + s * 0.5, cy - s * 0.8, cx - s * 0.5, cy - s * 0.8, s * 0.3);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy + s * 0.5, s * 0.2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawEmailIcon(ctx, cx, cy, s) {
+  ctx.save();
+  ctx.strokeStyle = '#6fd0a5';
+  ctx.lineWidth = 1.7;
+  ctx.lineCap = 'round';
+  ctx.strokeRect(cx - s * 0.75, cy - s * 0.5, s * 1.5, s);
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.75, cy - s * 0.5);
+  ctx.lineTo(cx, cy + s * 0.1);
+  ctx.lineTo(cx + s * 0.75, cy - s * 0.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawClockIcon(ctx, cx, cy, s) {
+  ctx.save();
+  ctx.strokeStyle = '#6fd0a5';
+  ctx.lineWidth = 1.7;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(cx, cy, s * 0.78, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - s * 0.44); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + s * 0.32, cy + s * 0.2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawSectorIcon(ctx, cx, cy, r, setor) {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(22,101,52,.32)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(111,208,165,.45)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.strokeStyle = '#6fd0a5';
+  ctx.lineWidth = 1.9;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const s = r * 0.46;
+  if (setor === 'RH') {
+    ctx.beginPath(); ctx.arc(cx, cy - s * 0.4, s * 0.38, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.72, cy + s * 0.88);
+    ctx.quadraticCurveTo(cx - s * 0.72, cy + s * 0.1, cx, cy + s * 0.05);
+    ctx.quadraticCurveTo(cx + s * 0.72, cy + s * 0.1, cx + s * 0.72, cy + s * 0.88);
+    ctx.stroke();
+  } else if (setor === 'Logística') {
+    const bw = s * 1.3, bh = s * 1.05;
+    ctx.strokeRect(cx - bw / 2, cy - bh / 2, bw, bh);
+    ctx.beginPath();
+    ctx.moveTo(cx - bw / 2, cy - bh / 2 + bh * 0.38); ctx.lineTo(cx + bw / 2, cy - bh / 2 + bh * 0.38);
+    ctx.moveTo(cx, cy - bh / 2); ctx.lineTo(cx, cy - bh / 2 + bh * 0.38);
+    ctx.stroke();
+  } else if (setor === 'Frotas') {
+    ctx.strokeRect(cx - s * 0.85, cy - s * 0.38, s * 1.15, s * 0.85);
+    ctx.strokeRect(cx + s * 0.3, cy - s * 0.72, s * 0.55, s * 0.72);
+    ctx.beginPath();
+    ctx.arc(cx - s * 0.42, cy + s * 0.48, s * 0.2, 0, Math.PI * 2);
+    ctx.arc(cx + s * 0.57, cy + s * 0.48, s * 0.2, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (setor === 'Caixas') {
+    ctx.strokeRect(cx - s * 0.72, cy - s * 0.42, s * 1.44, s * 0.84);
+    ctx.beginPath(); ctx.arc(cx, cy, s * 0.28, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.18, cy); ctx.lineTo(cx + s * 0.18, cy);
+    ctx.moveTo(cx, cy - s * 0.28); ctx.lineTo(cx, cy + s * 0.28);
+    ctx.stroke();
+  } else if (setor === 'Troca de notas') {
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.75, cy - s * 0.28); ctx.lineTo(cx + s * 0.35, cy - s * 0.28);
+    ctx.moveTo(cx + s * 0.08, cy - s * 0.62); ctx.lineTo(cx + s * 0.75, cy - s * 0.28); ctx.lineTo(cx + s * 0.08, cy + s * 0.06);
+    ctx.moveTo(cx + s * 0.75, cy + s * 0.28); ctx.lineTo(cx - s * 0.35, cy + s * 0.28);
+    ctx.moveTo(cx - s * 0.08, cy - s * 0.06); ctx.lineTo(cx - s * 0.75, cy + s * 0.28); ctx.lineTo(cx - s * 0.08, cy + s * 0.62);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI / 3 * i - Math.PI / 6;
+      const px = cx + s * 0.82 * Math.cos(a), py = cy + s * 0.82 * Math.sin(a);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function computeCardH(pessoas) {
+  let h = 20 + 38 + 48 + 11;
+  pessoas.forEach((p, i) => {
+    h += 40;
+    if (formatPhone(p.telefone)) h += 30;
+    if (p.email_corporativo) h += 30;
+    if (buildHorario(p)) h += 30;
+    h += 10;
+    if (i < pessoas.length - 1) h += 13;
+  });
+  return h + 20;
+}
+
+function drawPersonBlock(ctx, x, y, w, person) {
+  const iS = 9;
+  let cy = y;
+  ctx.save();
+  ctx.font = 'bold 26px Arial';
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(fitText(ctx, (person.nome || '').toUpperCase(), w), x, cy);
+  cy += 40;
+
+  function infoRow(drawIcon, label, value) {
+    if (!value) return;
+    const mid = cy + 15;
+    drawIcon(ctx, x + iS, mid, iS);
+    ctx.font = '12px Arial';
+    ctx.fillStyle = 'rgba(185,210,195,.52)';
+    ctx.textBaseline = 'top';
+    ctx.fillText(label, x + iS * 2 + 7, cy + 1);
+    ctx.font = '15px Arial';
+    ctx.fillStyle = '#dff5e8';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(fitText(ctx, value, w - iS * 2 - 9), x + iS * 2 + 7, cy + 29);
+    cy += 30;
+  }
+
+  const phone = formatPhone(person.telefone);
+  const email = person.email_corporativo;
+  const horario = buildHorario(person);
+  if (phone) infoRow(drawPhoneIcon, 'Contato', phone);
+  if (email) infoRow(drawEmailIcon, 'E-mail', email);
+  if (horario) infoRow(drawClockIcon, 'Horário', horario);
+  cy += 10;
+  ctx.restore();
+  return cy - y;
+}
+
+function drawSectorCard(ctx, x, y, w, setor, pessoas, dateLabel) {
+  const pad = 20;
+  const iconR = 18;
+  const cardH = computeCardH(pessoas);
+  drawRoundRectFilled(ctx, x, y, w, cardH, 18, 'rgba(3,10,6,.88)', 'rgba(22,163,74,.38)', 1.8);
+
+  let cy = y + pad;
+
+  // Date row
+  ctx.save();
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, x + px, y + h / 2 + 1);
+  drawCalendarIcon(ctx, x + pad + 8, cy + 14, 9);
+  ctx.fillStyle = 'rgba(185,210,195,.72)';
+  ctx.font = '15px Arial';
+  ctx.fillText(dateLabel, x + pad + 26, cy + 14);
   ctx.restore();
-  return { width: w, height: h };
-}
+  cy += 38;
 
-function drawInfoBox(ctx, x, y, w, h, label, value) {
-  drawRoundRectFilled(ctx, x, y, w, h, 18, 'rgba(255,255,255,.03)', 'rgba(111,208,165,.12)', 1);
-  ctx.fillStyle = '#6fd0a5';
-  ctx.font = 'bold 16px Arial';
+  // Sector badge
+  drawSectorIcon(ctx, x + pad + iconR, cy + iconR, iconR, setor);
+  const badgeX = x + pad + iconR * 2 + 12;
+  ctx.save();
+  ctx.font = 'bold 18px Arial';
+  const textW = ctx.measureText(setor).width;
+  const bh = 34, by = cy + iconR - bh / 2;
+  drawRoundRectFilled(ctx, badgeX, by, textW + 28, bh, 10, 'rgba(22,101,52,.28)', 'rgba(111,208,165,.28)', 1.2);
+  ctx.fillStyle = '#dcfce7';
   ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillText(label, x + 16, y + 12);
+  ctx.textBaseline = 'middle';
+  ctx.fillText(setor, badgeX + 14, by + bh / 2 + 1);
+  ctx.restore();
+  cy += iconR * 2 + 12;
 
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 24px Arial';
-  const fitted = fitText(ctx, value || '-', w - 32);
-  ctx.fillText(fitted, x + 16, y + 34);
-}
+  // Divider
+  ctx.fillStyle = 'rgba(111,208,165,.13)';
+  ctx.fillRect(x + pad, cy, w - pad * 2, 1);
+  cy += 10;
 
-function drawCardHeader(ctx, row, x, y, w) {
-  const dateLabel = `${weekdayBR(row.data_plantao)} • ${formatDateBR(row.data_plantao)}`;
-  drawPill(ctx, x + 22, y + 18, dateLabel, {
-    bg: 'rgba(22,101,52,.18)',
-    border: 'rgba(111,208,165,.24)',
-    color: '#d8ffea',
-    font: 'bold 18px Arial',
-    px: 14,
-    py: 8,
-    radius: 999,
+  // People
+  pessoas.forEach((person, i) => {
+    const usedH = drawPersonBlock(ctx, x + pad, cy, w - pad * 2, person);
+    cy += usedH;
+    if (i < pessoas.length - 1) {
+      ctx.fillStyle = 'rgba(111,208,165,.07)';
+      ctx.fillRect(x + pad, cy - 5, w - pad * 2, 1);
+      cy += 8;
+    }
   });
-
-  const setorW = ctx.measureText(String(row.setor || '')).width + 30;
-  drawPill(ctx, x + w - setorW - 22, y + 18, row.setor || '', {
-    bg: 'rgba(63,168,120,.18)',
-    border: 'rgba(111,208,165,.30)',
-    color: '#6fd0a5',
-    font: 'bold 18px Arial',
-    px: 14,
-    py: 8,
-    radius: 999,
-  });
-}
-
-function drawPersonCard(ctx, row, x, y, maxW) {
-  const cardH = 190;
-  drawRoundRectFilled(ctx, x, y, maxW, cardH, 28, 'rgba(7,18,14,.88)', 'rgba(111,208,165,.14)', 1.2);
-  drawCardHeader(ctx, row, x, y, maxW);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 40px Arial';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  const nome = fitText(ctx, row.nome || '', maxW - 44);
-  ctx.fillText(nome, x + 22, y + 66);
-
-  const phone = formatPhone(row.telefone) || '-';
-  const email = row.email_corporativo || row.email || '-';
-  const horario = buildHorario(row) || '-';
-
-  drawInfoBox(ctx, x + 22, y + 112, 220, 60, 'Contato', phone);
-  drawInfoBox(ctx, x + 258, y + 112, 356, 60, 'E-mail', email);
-  drawInfoBox(ctx, x + 630, y + 112, maxW - 652, 60, 'Horário', horario);
 
   return cardH;
+}
+
+function getDateRangeText(pessoas) {
+  const dates = [...new Set(pessoas.map((p) => p.data_plantao).filter(Boolean))].sort();
+  if (!dates.length) return '';
+  if (dates.length === 1) return `${weekdayBR(dates[0])} • ${formatDateBR(dates[0])}`;
+  const wds = [...new Set(dates.map(weekdayBR))];
+  const fmts = dates.map(formatDateBR);
+  return wds.length <= 2
+    ? `${wds.join(' e ')} • ${fmts[0]} e ${fmts[fmts.length - 1]}`
+    : `${fmts[0]} a ${fmts[fmts.length - 1]}`;
 }
 
 function getRowsForDivulgacao(setorFiltro = 'todos') {
@@ -1370,91 +1524,160 @@ async function renderImagemPlantao(canvasEl = null, setorFiltro = 'todos', subti
   if (!canvas) return;
 
   const rows = getRowsForDivulgacao(setorFiltro);
-  const cardH = 190;
-  const gap = 18;
-  const cardStartY = 430;
-  const footerH = 110;
-  const neededH = rows.length > 0
-    ? cardStartY + rows.length * (cardH + gap) - gap + footerH
-    : IMG_H;
-  const canvasH = Math.max(IMG_H, neededH);
+
+  const sidebarW = 200;
+  const mainX = sidebarW + 20;
+  const mainW = IMG_W - mainX - 20;
+  const colGap = 20;
+  const colW = (mainW - colGap) / 2;
+  const headerH = 215;
+  const footerH = 70;
+  const cardGap = 20;
+
+  // Group rows by sector preserving order
+  const orderedSectors = setores.filter((s) =>
+    setorFiltro === 'exceto_troca' ? s !== 'Troca de notas' :
+    setorFiltro === 'todos' ? true : s === setorFiltro
+  );
+  const grouped = new Map();
+  orderedSectors.forEach((s) => grouped.set(s, []));
+  rows.forEach((row) => {
+    if (!grouped.has(row.setor)) grouped.set(row.setor, []);
+    grouped.get(row.setor).push(row);
+  });
+  const sectors = [...grouped.entries()].filter(([, p]) => p.length > 0);
+
+  const col1 = sectors.filter((_, i) => i % 2 === 0);
+  const col2 = sectors.filter((_, i) => i % 2 === 1);
+
+  function colTotalH(col) {
+    return col.reduce((sum, [, p], i) => sum + computeCardH(p) + (i > 0 ? cardGap : 0), 0);
+  }
+
+  const cardsH = sectors.length === 0 ? 180
+    : sectors.length === 1 ? computeCardH(sectors[0][1])
+    : Math.max(colTotalH(col1), colTotalH(col2));
+
+  const canvasH = Math.max(IMG_H, headerH + cardsH + cardGap + footerH);
 
   canvas.width = IMG_W;
   canvas.height = canvasH;
   const ctx = canvas.getContext('2d');
 
-  drawBackground(ctx, canvasH);
-  await drawLogo(ctx);
+  drawBackground(ctx, IMG_W, canvasH);
+  await drawLogo(ctx, 25, 28, 150, 62);
 
-  const dataIni = document.getElementById('plantaoImgData')?.value || document.getElementById('plantaoData')?.value || '';
-  const dataFim = document.getElementById('plantaoImgDataFim')?.value || document.getElementById('plantaoDataFim')?.value || dataIni;
+  // Sidebar divider
+  ctx.fillStyle = 'rgba(111,208,165,.15)';
+  ctx.fillRect(sidebarW - 5, 18, 1, canvasH - 36);
 
-  const title = 'Escala de Plantão';
-  const subtitle = subtitleLabel || (setorFiltro === 'exceto_troca' ? 'Escala Geral' : setorFiltro === 'todos' ? 'Todos os setores' : `Setor: ${setorFiltro}`);
-  const dateText = dataIni === dataFim ? formatDateBR(dataIni) : `${formatDateBR(dataIni)} a ${formatDateBR(dataFim)}`;
-
-  ctx.fillStyle = '#ffffff';
+  // Sidebar tagline at bottom
+  const iconBoxSz = 58;
+  const tagY = canvasH - 185;
+  drawRoundRectFilled(ctx, 18, tagY, iconBoxSz, iconBoxSz, 14, 'rgba(22,101,52,.22)', 'rgba(111,208,165,.20)', 1.2);
+  ctx.save();
+  ctx.font = '28px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#6fd0a5';
+  ctx.fillText('🎧', 18 + iconBoxSz / 2, tagY + iconBoxSz / 2);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.font = 'bold 62px Arial';
-  ctx.fillText(title, 70, 188);
+  ctx.fillStyle = '#6fd0a5';
+  ctx.font = 'bold 13px Arial';
+  ['ATENDIMENTO', 'QUE MOVE', 'O AGRO.'].forEach((line, i) => ctx.fillText(line, 18, tagY + iconBoxSz + 10 + i * 18));
+  ctx.restore();
 
-  ctx.fillStyle = '#b7d8c9';
-  ctx.font = '28px Arial';
-  ctx.fillText('Relação de plantonistas escalados para atendimento no período informado.', 70, 252);
+  // Main header
+  const subtitle = subtitleLabel || (setorFiltro === 'exceto_troca' ? 'Todos os setores' : setorFiltro === 'todos' ? 'Todos os setores' : `Setor: ${setorFiltro}`);
+  const dataIni = document.getElementById('plantaoImgData')?.value || document.getElementById('plantaoData')?.value || '';
+  const dataFim = document.getElementById('plantaoImgDataFim')?.value || document.getElementById('plantaoDataFim')?.value || dataIni;
+  const dateText = dataIni === dataFim
+    ? `${weekdayBR(dataIni)} • ${formatDateBR(dataIni)}`
+    : `${formatDateBR(dataIni)} e ${formatDateBR(dataFim)}`;
 
-  drawPill(ctx, 70, 286, subtitle, {
-    bg: 'rgba(255,255,255,.06)',
-    border: 'rgba(111,208,165,.18)',
-    color: '#ffffff',
-    font: 'bold 21px Arial',
-    px: 14,
-    py: 8,
-  });
-  drawPill(ctx, 70, 336, `Período: ${dateText}`, {
-    bg: 'rgba(22,101,52,.18)',
-    border: 'rgba(111,208,165,.28)',
-    color: '#dcfce7',
-    font: 'bold 21px Arial',
-    px: 14,
-    py: 8,
-  });
+  ctx.save();
+  ctx.textAlign = 'left';
 
-  drawRoundRectFilled(ctx, 70, 400, 940, 2, 2, 'rgba(111,208,165,.18)');
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 66px Arial';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Escala de Plantão', mainX, 22);
 
-  let lastY = cardStartY;
+  ctx.fillStyle = 'rgba(185,210,195,.6)';
+  ctx.font = '20px Arial';
+  ctx.fillText('Relação de plantonistas escalados para atendimento no período informado.', mainX, 100);
 
-  if (!rows.length) {
-    drawRoundRectFilled(ctx, 70, 475, 940, 220, 28, 'rgba(7,18,14,.88)', 'rgba(111,208,165,.14)', 1.2);
+  // Info bar
+  const barY = 136;
+  ctx.font = 'bold 16px Arial';
+  const slW = ctx.measureText(subtitle).width + 26;
+  drawRoundRectFilled(ctx, mainX, barY, slW, 34, 999, 'rgba(255,255,255,.055)', 'rgba(111,208,165,.18)', 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(subtitle, mainX + 13, barY + 17);
+
+  ctx.fillStyle = 'rgba(111,208,165,.22)';
+  ctx.fillRect(mainX + slW + 13, barY + 7, 1, 20);
+
+  const periodX = mainX + slW + 26;
+  drawCalendarIcon(ctx, periodX + 8, barY + 17, 8);
+  ctx.font = 'bold 16px Arial';
+  ctx.fillStyle = 'rgba(185,210,195,.8)';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(' Período:', periodX + 22, barY + 17);
+  ctx.fillStyle = '#6fd0a5';
+  ctx.fillText(dateText, periodX + 22 + ctx.measureText(' Período: ').width, barY + 17);
+
+  ctx.fillStyle = 'rgba(111,208,165,.18)';
+  ctx.fillRect(mainX, 186, mainW, 1.5);
+  ctx.restore();
+
+  // Cards
+  const cardsY = headerH;
+
+  if (sectors.length === 0) {
+    drawRoundRectFilled(ctx, mainX, cardsY, mainW, 180, 18, 'rgba(3,10,6,.88)', 'rgba(22,163,74,.25)', 1.5);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 42px Arial';
+    ctx.font = 'bold 28px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('Nenhum plantonista cadastrado', IMG_W / 2, 560);
-    ctx.fillStyle = '#b7d8c9';
-    ctx.font = '28px Arial';
-    ctx.fillText('Ajuste os filtros e atualize a imagem.', IMG_W / 2, 620);
-    ctx.textAlign = 'left';
-    lastY = 720;
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Nenhum plantonista cadastrado', mainX + mainW / 2, cardsY + 90);
+  } else if (sectors.length === 1) {
+    const [[setor, pessoas]] = sectors;
+    drawSectorCard(ctx, mainX, cardsY, mainW, setor, pessoas, getDateRangeText(pessoas));
   } else {
-    let y = cardStartY;
-    rows.forEach((row) => {
-      drawPersonCard(ctx, row, 70, y, 940);
-      y += cardH + gap;
+    let y1 = cardsY, y2 = cardsY;
+    col1.forEach(([setor, pessoas]) => {
+      const h = drawSectorCard(ctx, mainX, y1, colW, setor, pessoas, getDateRangeText(pessoas));
+      y1 += h + cardGap;
     });
-    lastY = y;
+    col2.forEach(([setor, pessoas]) => {
+      const h = drawSectorCard(ctx, mainX + colW + colGap, y2, colW, setor, pessoas, getDateRangeText(pessoas));
+      y2 += h + cardGap;
+    });
   }
 
-  const footerLineY = lastY + 10;
+  // Footer
+  const footerY = canvasH - footerH + 8;
+  ctx.save();
   ctx.fillStyle = 'rgba(111,208,165,.18)';
-  ctx.fillRect(70, footerLineY, 940, 2);
-  ctx.fillStyle = '#e2e2f0';
-  ctx.font = '24px Arial';
+  ctx.fillRect(mainX, footerY, mainW, 1.5);
+  drawRoundRectFilled(ctx, mainX, footerY + 12, 26, 26, 6, 'rgba(22,101,52,.2)', 'rgba(111,208,165,.18)', 1);
+  ctx.font = '14px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#6fd0a5';
+  ctx.fillText('📦', mainX + 13, footerY + 25);
   ctx.textAlign = 'left';
-  ctx.fillText('Grão 1000 • Escala de Plantão', 70, footerLineY + 22);
+  ctx.font = 'italic 15px Arial';
+  ctx.fillStyle = 'rgba(185,210,195,.65)';
+  ctx.fillText('Compromisso, agilidade e confiança para manter o agro sempre em movimento.', mainX + 34, footerY + 25);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#6fd0a5';
-  ctx.fillText('www.grao1000.com.br', 1010, footerLineY + 22);
-  ctx.textAlign = 'left';
+  ctx.font = 'bold 15px Arial';
+  ctx.fillText('www.grao1000.com.br', mainX + mainW, footerY + 25);
+  ctx.restore();
 }
 
 function baixarImagemPlantao(canvasEl = null, sufixo = '') {
