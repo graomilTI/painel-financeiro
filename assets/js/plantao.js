@@ -6,6 +6,7 @@ const STORAGE_KEY = 'painel_rh_plantao_setores_extra';
 const TEMPLATE_STORAGE_KEY = 'painel_rh_plantao_modelo_padrao';
 const IMG_W = 1600;
 const IMG_H = 900;
+const WA_W  = 1080;
 
 let setores = [...DEFAULT_SETORES];
 let colaboradores = [];
@@ -1690,16 +1691,148 @@ function baixarImagemPlantao(canvasEl = null, sufixo = '') {
   link.click();
 }
 
+async function renderWhatsappStatus(canvasEl, setor) {
+  if (!canvasEl || !setor) return;
+  const rows = getRowsForDivulgacao(setor);
+
+  if (!rows.length) {
+    canvasEl.width = WA_W; canvasEl.height = 400;
+    const ctx = canvasEl.getContext('2d');
+    ctx.fillStyle = '#030e07'; ctx.fillRect(0, 0, WA_W, 400);
+    ctx.fillStyle = 'rgba(185,210,195,.5)'; ctx.font = '30px Arial';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Nenhum plantonista neste setor', WA_W / 2, 200);
+    return;
+  }
+
+  const PAD = 56, HEADER_H = 360, FOOTER_H = 90, GAP = 18;
+
+  function personH(p) {
+    let h = 32 + 52; // top-pad + name
+    if (formatPhone(p.telefone)) h += 46;
+    if (p.email_corporativo) h += 46;
+    if (buildHorario(p)) h += 46;
+    return h + 26; // bottom-pad
+  }
+
+  const cardsH = rows.reduce((s, p) => s + personH(p), 0) + (rows.length - 1) * GAP;
+  const canvasH = Math.max(1080, HEADER_H + cardsH + 60 + FOOTER_H);
+
+  canvasEl.width = WA_W; canvasEl.height = canvasH;
+  const ctx = canvasEl.getContext('2d');
+
+  drawBackground(ctx, WA_W, canvasH);
+
+  // Acento lateral esquerdo
+  const aG = ctx.createLinearGradient(0, 0, 0, canvasH);
+  aG.addColorStop(0, 'rgba(111,208,165,.55)');
+  aG.addColorStop(0.5, 'rgba(111,208,165,.18)');
+  aG.addColorStop(1, 'rgba(111,208,165,.0)');
+  ctx.fillStyle = aG; ctx.fillRect(0, 0, 8, canvasH);
+
+  // Logo
+  await drawLogo(ctx, PAD, 44, 190, 78);
+
+  // Título
+  ctx.save();
+  ctx.font = 'bold 82px Arial'; ctx.fillStyle = '#fff';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('Escala de Plantão', PAD, 150);
+  ctx.restore();
+
+  // Badge setor
+  const iconR = 28, badgeY = 256;
+  drawSectorIcon(ctx, PAD + iconR, badgeY + iconR, iconR, setor);
+  const bx = PAD + iconR * 2 + 20, bH = 54, bW = WA_W - bx - PAD;
+  drawRoundRectFilled(ctx, bx, badgeY + iconR - bH / 2, bW, bH, 16,
+    'rgba(21,101,52,.3)', 'rgba(111,208,165,.3)', 1.5);
+  ctx.save();
+  ctx.font = 'bold 34px Arial'; ctx.fillStyle = '#dcfce7';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(setor, bx + 22, badgeY + iconR + 1);
+  ctx.restore();
+
+  // Data
+  const dateY = badgeY + iconR * 2 + 22;
+  const iS = 14;
+  drawCalendarIcon(ctx, PAD + iS, dateY + iS, iS);
+  ctx.save();
+  ctx.font = '28px Arial'; ctx.fillStyle = '#6fd0a5';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(getDateRangeText(rows), PAD + iS * 2 + 14, dateY + iS);
+  ctx.restore();
+
+  // Divisor
+  const divY = HEADER_H - 20;
+  ctx.fillStyle = 'rgba(111,208,165,.22)'; ctx.fillRect(PAD, divY, WA_W - PAD * 2, 1.5);
+
+  // Cards por pessoa
+  const cardW = WA_W - PAD * 2;
+  let cy = divY + 30;
+
+  rows.forEach((person) => {
+    const h = personH(person);
+    drawRoundRectFilled(ctx, PAD, cy, cardW, h, 22,
+      'rgba(3,12,7,.85)', 'rgba(22,163,74,.28)', 1.5);
+
+    let iy = cy + 32;
+
+    ctx.save();
+    ctx.font = 'bold 44px Arial'; ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(fitText(ctx, (person.nome || '').toUpperCase(), cardW - 44), PAD + 22, iy);
+    ctx.restore();
+    iy += 52;
+
+    function infoRow(drawIcon, val) {
+      if (!val) return;
+      const s = 13, mid = iy + 23;
+      drawIcon(ctx, PAD + 22 + s, mid, s);
+      ctx.save();
+      ctx.font = 'bold 26px Arial'; ctx.fillStyle = '#c8ead7';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(fitText(ctx, val, cardW - 68), PAD + 22 + s * 2 + 10, mid);
+      ctx.restore();
+      iy += 46;
+    }
+
+    infoRow(drawPhoneIcon, formatPhone(person.telefone));
+    infoRow(drawEmailIcon, person.email_corporativo);
+    infoRow(drawClockIcon, buildHorario(person));
+
+    cy += h + GAP;
+  });
+
+  // Rodapé
+  const footerY = canvasH - FOOTER_H + 12;
+  ctx.fillStyle = 'rgba(111,208,165,.18)'; ctx.fillRect(PAD, footerY, WA_W - PAD * 2, 1.5);
+  ctx.save();
+  ctx.font = 'bold 26px Arial'; ctx.fillStyle = '#6fd0a5';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('www.grao1000.com.br', WA_W / 2, footerY + 38);
+  ctx.restore();
+}
+
 async function renderAmbasImagens() {
+  renderDivulgacaoControls();
   const canvasGeral = document.getElementById('plantaoCanvasGeral');
   const canvasTroca = document.getElementById('plantaoCanvasTroca');
+  const canvasWA   = document.getElementById('plantaoCanvasWA');
+  const waSetor    = document.getElementById('plantaoWASetor')?.value || setores[0] || '';
   await Promise.all([
     canvasGeral ? renderImagemPlantao(canvasGeral, 'exceto_troca', 'Escala Geral') : Promise.resolve(),
     canvasTroca ? renderImagemPlantao(canvasTroca, 'Troca de notas', 'Troca de Notas') : Promise.resolve(),
+    (canvasWA && waSetor) ? renderWhatsappStatus(canvasWA, waSetor) : Promise.resolve(),
   ]);
 }
 
-function renderDivulgacaoControls() {}
+function renderDivulgacaoControls() {
+  const waSelect = document.getElementById('plantaoWASetor');
+  if (!waSelect) return;
+  const current = waSelect.value;
+  waSelect.innerHTML = setores.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  if (setores.includes(current)) waSelect.value = current;
+}
 
 function renderConsultaSetores() {
   const select = document.getElementById('consultaSetor');
@@ -1983,6 +2116,23 @@ function renderPage(content) {
             </div>
             <canvas id="plantaoCanvasTroca" class="plantao-canvas-img" width="${IMG_W}" height="${IMG_H}"></canvas>
           </div>
+
+          <div class="plantao-div-card">
+            <div class="plantao-div-head">
+              <div class="plantao-div-label">
+                <span class="plantao-div-num" style="font-size:11px;letter-spacing:.5px;padding:0 8px;">WA</span>
+                <div>
+                  <div class="plantao-div-title">Status WhatsApp</div>
+                  <div class="plantao-div-sub">1080×vertical · por setor</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select class="plantao-select" id="plantaoWASetor" style="min-width:160px;"></select>
+                <button type="button" class="plantao-btn primary" id="btnBaixarWA">Baixar PNG</button>
+              </div>
+            </div>
+            <canvas id="plantaoCanvasWA" class="plantao-canvas-img" width="${WA_W}" height="${WA_W}"></canvas>
+          </div>
         </div>
       </div>
     </section>
@@ -2013,6 +2163,15 @@ function renderPage(content) {
   document.getElementById('btnAtualizarImagem')?.addEventListener('click', renderAmbasImagens);
   document.getElementById('btnBaixarImagemGeral')?.addEventListener('click', () => baixarImagemPlantao(document.getElementById('plantaoCanvasGeral'), 'geral'));
   document.getElementById('btnBaixarImagemTroca')?.addEventListener('click', () => baixarImagemPlantao(document.getElementById('plantaoCanvasTroca'), 'troca_notas'));
+  document.getElementById('plantaoWASetor')?.addEventListener('change', async () => {
+    const setor = document.getElementById('plantaoWASetor').value;
+    const canvasWA = document.getElementById('plantaoCanvasWA');
+    if (canvasWA && setor) await renderWhatsappStatus(canvasWA, setor);
+  });
+  document.getElementById('btnBaixarWA')?.addEventListener('click', () => {
+    const setor = document.getElementById('plantaoWASetor')?.value || '';
+    baixarImagemPlantao(document.getElementById('plantaoCanvasWA'), `wa_${setor.replace(/\s+/g, '_')}`);
+  });
   document.getElementById('plantaoData')?.addEventListener('change', () => {
     const ini = document.getElementById('plantaoData').value;
     document.getElementById('plantaoDataFim').value = addDaysISO(ini, 1);
